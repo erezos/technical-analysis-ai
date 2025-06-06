@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "111977572047",
+    "project_id": "fmm-config-manager",
+    "storage_bucket": "fmm-config-manager.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:111977572047:android:2551a03fac4425e4b279ba",
+        "android_client_info": {
+          "package_name": "com.ioa.TipSync"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyD_5o7h2sQyqOKoHowZc4Qph76bxe3ykBg"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
