@@ -29,7 +29,8 @@ class TradingTipsProvider with ChangeNotifier {
 
   Future<TradingTip?> getTipForTimeframe(String timeframe) async {
     try {
-      return await _firebaseService.getLatestTipForTimeframe(timeframe);
+      final tip = await _firebaseService.getLatestTipForTimeframe(timeframe);
+      return tip;
     } catch (e) {
       _error = e.toString();
       notifyListeners();

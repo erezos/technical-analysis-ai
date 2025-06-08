@@ -126,6 +126,7 @@ const { db, admin } = require('../config/firebase');
 const storage = admin.storage();
 const fetch = require('node-fetch');
 const notificationService = require('./notificationService');
+const statsService = require('./statsService');
 
 class TradingTipsService {
   constructor() {
@@ -167,7 +168,7 @@ class TradingTipsService {
       const file = this.graphsBucket.file(`latest_images/${timeframe}_${type}.png`);
       const [url] = await file.getSignedUrl({
         action: 'read',
-        expires: Date.now() + 24 * 60 * 60 * 1000 // 24 hours
+        expires: Date.now() + 30 * 24 * 60 * 60 * 1000 // 30 days
       });
       return url;
     } catch (error) {
@@ -181,7 +182,7 @@ class TradingTipsService {
       const file = this.graphsBucket.file(`analysis_images/${symbol}_${date}_${timeframe}_${type}.png`);
       const [url] = await file.getSignedUrl({
         action: 'read',
-        expires: Date.now() + 24 * 60 * 60 * 1000 // 24 hours
+        expires: Date.now() + 30 * 24 * 60 * 60 * 1000 // 30 days
       });
       return url;
     } catch (error) {
@@ -395,7 +396,7 @@ class TradingTipsService {
       const file = this.graphsBucket.file(filePath);
       const [url] = await file.getSignedUrl({
         action: 'read',
-        expires: Date.now() + 24 * 60 * 60 * 1000 // 24 hours
+        expires: Date.now() + 30 * 24 * 60 * 60 * 1000 // 30 days
       });
       return url;
     } catch (error) {
@@ -506,6 +507,15 @@ class TradingTipsService {
       console.log('📱 Saving to latest_tips collection (for app compatibility)...');
       const latestTipsRef = this.latestTipsCollection.doc(timeframe);
       await latestTipsRef.set(tipDocument, { merge: true });
+
+      // 📊 Update app statistics on successful tip upload
+      console.log('📊 Updating app statistics...');
+      const statsResult = await statsService.updateStatsOnTipUpload(tipData);
+      if (statsResult.success) {
+        console.log('✅ App statistics updated successfully');
+      } else {
+        console.log('⚠️ Stats update failed:', statsResult.error);
+      }
 
       console.log('✅ Titled background saved successfully!');
       console.log('🎨 Titled Background URL:', backgroundDownloadUrl);

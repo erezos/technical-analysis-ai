@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:firebase_core/firebase_core.dart';
-import 'package:firebase_messaging/firebase_messaging.dart';
 import 'disclaimer_page.dart';
 import 'providers/trading_tips_provider.dart';
 import 'screens/trading_tip_screen.dart';
 import 'services/notification_service.dart';
+import 'services/stats_service.dart';
+import 'services/trading_link_service.dart';
+import 'services/notification_permission_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -13,6 +15,12 @@ void main() async {
   
   // Initialize notifications
   await NotificationService.initialize();
+  
+  // Initialize app statistics
+  await StatsService.initializeStatsForSession();
+  
+  // Initialize trading link
+  await TradingLinkService.initializeTradingLinkForSession();
   
   runApp(const MyApp());
 }
@@ -97,6 +105,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     // Load tips when screen loads
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<TradingTipsProvider>().loadLatestTips();
+      
+      // Check if we should show notification permission prompt (40% chance)
+      _checkNotificationPermission();
     });
   }
 
@@ -105,6 +116,21 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     _fadeController.dispose();
     _scaleController.dispose();
     super.dispose();
+  }
+
+  /// Check notification permission and show prompt with 40% probability
+  Future<void> _checkNotificationPermission() async {
+    try {
+      // Wait a bit for the UI to settle after animations
+      await Future.delayed(const Duration(milliseconds: 1500));
+      
+      final shouldShow = await NotificationPermissionService.shouldShowPermissionPrompt();
+      if (shouldShow && mounted) {
+        await NotificationPermissionService.showPermissionDialog(context);
+      }
+    } catch (e) {
+      print('❌ Error checking notification permission: $e');
+    }
   }
 
   @override
@@ -118,33 +144,41 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     return Scaffold(
       body: Container(
         decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              Color(0xFF0D1117),
-              Color(0xFF161B22),
-              Color(0xFF1A1A1A),
-            ],
+          image: DecorationImage(
+            image: AssetImage('assets/images/background.jpg'),
+            fit: BoxFit.cover,
           ),
         ),
-        child: SafeArea(
-          child: FadeTransition(
-            opacity: _fadeAnimation,
-            child: ScaleTransition(
-              scale: _scaleAnimation,
-              child: needsScrolling 
-                ? SingleChildScrollView(
-                    physics: const BouncingScrollPhysics(),
-                    child: Padding(
+        child: Container(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                Colors.black.withOpacity(0.85),
+                Colors.black.withOpacity(0.9),
+                Colors.black.withOpacity(0.95),
+              ],
+            ),
+          ),
+          child: SafeArea(
+            child: FadeTransition(
+              opacity: _fadeAnimation,
+              child: ScaleTransition(
+                scale: _scaleAnimation,
+                child: needsScrolling 
+                  ? SingleChildScrollView(
+                      physics: const BouncingScrollPhysics(),
+                      child: Padding(
+                        padding: EdgeInsets.all(isTablet ? 24.0 : 20.0),
+                        child: _buildScrollableContent(screenHeight, isTablet, buttonHeight),
+                      ),
+                    )
+                  : Padding(
                       padding: EdgeInsets.all(isTablet ? 24.0 : 20.0),
-                      child: _buildScrollableContent(screenHeight, isTablet, buttonHeight),
+                      child: _buildFixedContent(screenHeight, isTablet, buttonHeight),
                     ),
-                  )
-                : Padding(
-                    padding: EdgeInsets.all(isTablet ? 24.0 : 20.0),
-                    child: _buildFixedContent(screenHeight, isTablet, buttonHeight),
-                  ),
+              ),
             ),
           ),
         ),
@@ -232,9 +266,10 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   }
 
   Widget _buildStatsCard() {
-    return Consumer<TradingTipsProvider>(
-      builder: (context, provider, child) {
-        return Container(
+    // Get session-based cached stats (no real-time streaming)
+    final stats = StatsService.getSessionStats();
+    
+    return Container(
           padding: const EdgeInsets.all(20),
           decoration: BoxDecoration(
             gradient: LinearGradient(
@@ -261,7 +296,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             children: [
               _buildStatItem(
                 'Generated Tips',
-                '${provider.latestTips.length}',
+                StatsService.formatGeneratedTips(stats['generatedTips'] ?? 47),
                 Icons.trending_up,
                 Theme.of(context).colorScheme.primary,
               ),
@@ -272,7 +307,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               ),
               _buildStatItem(
                 'Success Rate',
-                '94%',
+                StatsService.formatSuccessRate((stats['successRate'] ?? 96.2).toDouble()),
                 Icons.verified,
                 Colors.green,
               ),
@@ -283,15 +318,13 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               ),
               _buildStatItem(
                 'AI Accuracy',
-                '98%',
+                StatsService.formatAiAccuracy((stats['aiAccuracy'] ?? 98.7).toDouble()),
                 Icons.psychology,
                 Colors.blue,
               ),
             ],
           ),
         );
-      },
-    );
   }
 
   Widget _buildStatItem(String label, String value, IconData icon, Color color) {
@@ -605,24 +638,44 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     );
   }
 
-  void _openTradingPlatform() {
-    // TODO: Update this URL to your trading platform affiliate link
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: const Text('🚀 Opening trading platform...'),
-        backgroundColor: const Color(0xFFFFD700),
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-        action: SnackBarAction(
-          label: 'OK',
-          textColor: Colors.black,
-          onPressed: () {},
+  void _openTradingPlatform() async {
+    try {
+      // Show loading snackbar
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('🚀 Opening trading platform...'),
+          backgroundColor: const Color(0xFFFFD700),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          duration: const Duration(seconds: 2),
         ),
-      ),
-    );
-    
-    // Example implementation (you'll replace with actual URL launcher):
-    // await launchUrl(Uri.parse('https://your-trading-platform.com/signup?ref=your-code'));
+      );
+      
+      // Launch trading platform URL from Firebase
+      final success = await TradingLinkService.launchTradingPlatform();
+      
+      if (!success) {
+        // Show error if launch failed
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('❌ Unable to open trading platform'),
+            backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          ),
+        );
+      }
+    } catch (e) {
+      print('Error opening trading platform: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('❌ Error opening trading platform'),
+          backgroundColor: Colors.red,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        ),
+      );
+    }
   }
 
   Widget _buildFooter() {

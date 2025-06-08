@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:share_plus/share_plus.dart';
 import '../models/trading_tip.dart';
 
 class TradingTipScreen extends StatefulWidget {
@@ -79,9 +80,7 @@ class _TradingTipScreenState extends State<TradingTipScreen>
         actions: [
           IconButton(
             icon: const Icon(Icons.share),
-            onPressed: () {
-              // TODO: Implement share functionality
-            },
+            onPressed: _shareTradingTip,
           ),
         ],
       ),
@@ -857,5 +856,126 @@ class _TradingTipScreenState extends State<TradingTipScreen>
 
   String _formatDate(DateTime date) {
     return '${date.day}/${date.month}/${date.year} at ${date.hour}:${date.minute.toString().padLeft(2, '0')}';
+  }
+
+  void _shareTradingTip() async {
+    try {
+      // Build comprehensive share message
+      final shareContent = _buildShareContent();
+      
+      // Show a brief loading indicator
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Row(
+            children: [
+              SizedBox(
+                width: 16,
+                height: 16,
+                child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+              ),
+              SizedBox(width: 12),
+              Text('📤 Preparing to share...'),
+            ],
+          ),
+          backgroundColor: _getSentimentColor(widget.tip.sentiment),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          duration: const Duration(seconds: 1),
+        ),
+      );
+
+      // Get screen dimensions for iPad positioning
+      final screenSize = MediaQuery.of(context).size;
+      
+      // Share using the share_plus package with iPad positioning
+      await Share.share(
+        shareContent,
+        subject: '${widget.tip.symbol} - ${widget.tip.sentimentDisplay} Trading Signal',
+        sharePositionOrigin: Rect.fromLTWH(
+          screenSize.width * 0.8, // Near share button (right side)
+          100, // Near app bar
+          screenSize.width * 0.2, // Width of share area
+          200, // Height of share area
+        ),
+      );
+
+      print('✅ Trading tip shared successfully');
+    } catch (e) {
+      print('❌ Error sharing trading tip: $e');
+      
+      // Show error message
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('❌ Unable to share trading tip'),
+          backgroundColor: Colors.red,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        ),
+      );
+    }
+  }
+
+  String _buildShareContent() {
+    final sentimentEmoji = widget.tip.sentiment?.toLowerCase() == 'bullish' ? '📈' : '📉';
+    final strengthStars = _getStrengthStars(widget.tip.strength);
+    final companyName = widget.tip.companyName;
+    final symbol = widget.tip.symbol;
+    final timeframe = widget.tip.formattedTimeframe;
+    
+    String content = '';
+    
+    // Header with branding
+    content += '🤖 AI Trading Signal\n';
+    content += '━━━━━━━━━━━━━━━━━━━━\n\n';
+    
+    // Main signal info
+    content += '$sentimentEmoji $companyName ($symbol)\n';
+    content += '📊 Sentiment: ${widget.tip.sentimentDisplay}\n';
+    content += '⚡ Strength: $strengthStars (${widget.tip.strengthDisplay}/5.0)\n';
+    content += '⏰ Timeframe: $timeframe\n\n';
+    
+    // Trading levels if available
+    if (widget.tip.hasAnalysisData) {
+      content += '💰 Trading Levels:\n';
+      if (widget.tip.entryPrice != null) {
+        content += '🎯 Entry: \$${widget.tip.entryPrice!.toStringAsFixed(2)}\n';
+      }
+      if (widget.tip.stopLoss != null) {
+        content += '🛡️ Stop Loss: \$${widget.tip.stopLoss!.toStringAsFixed(2)}\n';
+      }
+      if (widget.tip.takeProfit != null) {
+        content += '🎉 Take Profit: \$${widget.tip.takeProfit!.toStringAsFixed(2)}\n';
+      }
+      content += '\n';
+    }
+    
+    // Key reasoning points (max 3)
+    if (widget.tip.reasoning != null && widget.tip.reasoning!.isNotEmpty) {
+      content += '🧠 Key Analysis:\n';
+      final topReasons = widget.tip.reasoning!.take(3);
+      for (final reason in topReasons) {
+        content += '• $reason\n';
+      }
+      content += '\n';
+    }
+    
+    // Footer with app branding
+    content += '━━━━━━━━━━━━━━━━━━━━\n';
+    content += '🚀 Powered by Technical-Analysis.AI\n';
+    content += '⚠️ Educational purposes only. Not financial advice.\n';
+    content += '#TradingTips #AI #TechnicalAnalysis';
+    
+    return content;
+  }
+
+  String _getStrengthStars(double? strength) {
+    if (strength == null) return '⭐⭐⭐ (N/A)';
+    
+    final absStrength = strength.abs();
+    if (absStrength >= 4.5) return '⭐⭐⭐⭐⭐';
+    if (absStrength >= 3.5) return '⭐⭐⭐⭐';
+    if (absStrength >= 2.5) return '⭐⭐⭐';
+    if (absStrength >= 1.5) return '⭐⭐';
+    return '⭐';
   }
 } 

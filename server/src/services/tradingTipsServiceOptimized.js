@@ -26,6 +26,7 @@ const { db, admin } = require('../config/firebase');
 const storage = admin.storage();
 const fetch = require('node-fetch');
 const notificationService = require('./notificationService');
+const statsService = require('./statsService');
 
 class OptimizedTradingTipsService {
   constructor() {
@@ -81,7 +82,7 @@ class OptimizedTradingTipsService {
       const file = this.graphsBucket.file(`latest_images/${timeframe}_trading_card.png`);
       const [url] = await file.getSignedUrl({
         action: 'read',
-        expires: Date.now() + 24 * 60 * 60 * 1000 // 24 hours
+        expires: Date.now() + 30 * 24 * 60 * 60 * 1000 // 30 days
       });
       return url;
     } catch (error) {
@@ -229,7 +230,7 @@ class OptimizedTradingTipsService {
       const file = this.graphsBucket.file(filePath);
       const [url] = await file.getSignedUrl({
         action: 'read',
-        expires: Date.now() + 24 * 60 * 60 * 1000 // 24 hours
+        expires: Date.now() + 30 * 24 * 60 * 60 * 1000 // 30 days
       });
       return url;
     } catch (error) {
@@ -296,6 +297,11 @@ class OptimizedTradingTipsService {
           console.log('✅ Push notification sent:', notificationResult.title);
         }
       }
+
+      // 📊 Update app stats
+      console.log('📊 Updating app stats...');
+      await statsService.updateStatsOnTipUpload();
+      console.log('✅ App stats updated');
 
       return {
         backgroundUrl: backgroundImageUrl,
