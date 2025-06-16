@@ -22,7 +22,7 @@ jobs:
     - name: Install dependencies
       run: |
         npm init -y
-        npm install firebase-admin node-fetch@2.7.0
+        npm install firebase-admin
         
     - name: Update Hot Board Data
       env:
@@ -31,7 +31,6 @@ jobs:
       run: |
         cat > update-hot-board.js << 'EOF'
         const admin = require('firebase-admin');
-        const fetch = require('node-fetch');
 
         // Initialize Firebase Admin
         const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
