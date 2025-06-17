@@ -175,18 +175,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
 
   Widget _buildTradingTipsScreen(Size screenSize, bool isSmallMobile, bool isTablet) {
-    final screenHeight = screenSize.height;
-    
-    // Responsive sizing with Apple-compliant touch targets
-    final buttonHeight = ResponsiveUtils.getButtonHeight(
-      context,
-      smallMobile: 44.0, // Always meet Apple's 44pt minimum
-      mobile: 60.0,
-      tablet: 65.0,
-    );
-    final requiredHeight = (buttonHeight * 4) + (6 * 3) + (isSmallMobile ? 160 : 250);
-    final needsScrolling = screenHeight < requiredHeight; // Only scroll if actually needed
-    
     return Container(
       decoration: const BoxDecoration(
         image: DecorationImage(
@@ -211,18 +199,12 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             opacity: _fadeAnimation,
             child: ScaleTransition(
               scale: _scaleAnimation,
-              child: needsScrolling 
-                ? SingleChildScrollView(
-                    physics: const BouncingScrollPhysics(),
-                    child: Padding(
-                      padding: EdgeInsets.all(isSmallMobile ? 8.0 : (isTablet ? 24.0 : 20.0)),
-                      child: _buildScrollableContent(screenHeight, isTablet, buttonHeight, isSmallMobile),
-                    ),
-                  )
-                : Padding(
-                    padding: EdgeInsets.all(isSmallMobile ? 8.0 : (isTablet ? 24.0 : 20.0)),
-                    child: _buildFixedContent(screenHeight, isTablet, buttonHeight, isSmallMobile),
-                  ),
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  // Use LayoutBuilder for proper responsive design
+                  return _buildResponsiveContent(constraints, isSmallMobile, isTablet);
+                },
+              ),
             ),
           ),
         ),
@@ -443,34 +425,79 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     );
   }
 
-  Widget _buildFixedContent(double screenHeight, bool isTablet, double buttonHeight, bool isSmallMobile) {
+  Widget _buildResponsiveContent(BoxConstraints constraints, bool isSmallMobile, bool isTablet) {
+    // Calculate responsive dimensions based on available space
+    final availableHeight = constraints.maxHeight;
+    final availableWidth = constraints.maxWidth;
+    
+    // Responsive button height based on available space
+    final buttonHeight = _calculateButtonHeight(availableHeight, isSmallMobile, isTablet);
+    
+    // Calculate padding based on screen size
+    final horizontalPadding = isSmallMobile ? 8.0 : (isTablet ? 24.0 : 20.0);
+    final verticalPadding = isSmallMobile ? 8.0 : (isTablet ? 16.0 : 12.0);
+    
+    // Calculate required space for all components
+    final headerHeight = isSmallMobile ? 120 : (isTablet ? 180 : 150);
+    final statsHeight = isSmallMobile ? 80 : (isTablet ? 120 : 100);
+    final footerHeight = isSmallMobile ? 40 : (isTablet ? 60 : 50);
+    final buttonsHeight = buttonHeight * 4; // 4 buttons
+    final spacingHeight = isSmallMobile ? 40 : (isTablet ? 80 : 60); // Total spacing
+    
+    final totalRequiredHeight = headerHeight + statsHeight + footerHeight + buttonsHeight + spacingHeight + (verticalPadding * 2);
+    
+    return Padding(
+      padding: EdgeInsets.symmetric(
+        horizontal: horizontalPadding,
+        vertical: verticalPadding,
+      ),
+      child: totalRequiredHeight > availableHeight
+        ? _buildScrollableLayout(buttonHeight, isSmallMobile, isTablet)
+        : _buildFixedLayout(buttonHeight, isSmallMobile, isTablet, availableHeight),
+    );
+  }
+
+  double _calculateButtonHeight(double availableHeight, bool isSmallMobile, bool isTablet) {
+    if (isSmallMobile) {
+      return 44.0; // Apple's minimum touch target
+    } else if (isTablet) {
+      return (availableHeight * 0.08).clamp(50.0, 80.0);
+    } else {
+      return (availableHeight * 0.07).clamp(48.0, 70.0);
+    }
+  }
+
+  Widget _buildFixedLayout(double buttonHeight, bool isSmallMobile, bool isTablet, double availableHeight) {
     return Column(
       children: [
         _buildHeader(),
-        SizedBox(height: isSmallMobile ? 8 : (screenHeight * 0.03)),
+        SizedBox(height: isSmallMobile ? 8 : (availableHeight * 0.02)),
         _buildStatsCard(),
-        SizedBox(height: isSmallMobile ? 6 : (screenHeight * 0.02)),
+        SizedBox(height: isSmallMobile ? 6 : (availableHeight * 0.015)),
         Expanded(
           child: _buildTimeframeButtons(buttonHeight),
         ),
-        SizedBox(height: isSmallMobile ? 4 : (screenHeight * 0.015)),
+        SizedBox(height: isSmallMobile ? 4 : (availableHeight * 0.01)),
         _buildFooter(),
       ],
     );
   }
 
-  Widget _buildScrollableContent(double screenHeight, bool isTablet, double buttonHeight, bool isSmallMobile) {
-    return Column(
-      children: [
-        _buildHeader(),
-        SizedBox(height: isSmallMobile ? 8 : 24),
-        _buildStatsCard(),
-        SizedBox(height: isSmallMobile ? 6 : 20),
-        _buildTimeframeButtons(buttonHeight),
-        SizedBox(height: isSmallMobile ? 6 : 20),
-        _buildFooter(),
-        if (isSmallMobile) SizedBox(height: 10), // Extra bottom padding for iPhone 13 mini
-      ],
+  Widget _buildScrollableLayout(double buttonHeight, bool isSmallMobile, bool isTablet) {
+    return SingleChildScrollView(
+      physics: const BouncingScrollPhysics(),
+      child: Column(
+        children: [
+          _buildHeader(),
+          SizedBox(height: isSmallMobile ? 8 : 24),
+          _buildStatsCard(),
+          SizedBox(height: isSmallMobile ? 6 : 20),
+          _buildTimeframeButtons(buttonHeight),
+          SizedBox(height: isSmallMobile ? 6 : 20),
+          _buildFooter(),
+          SizedBox(height: isSmallMobile ? 20 : 30), // Extra bottom padding
+        ],
+      ),
     );
   }
 
@@ -509,6 +536,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         SizedBox(height: isSmallMobile ? 12 : (isTablet ? 32 : 24)),
         Text(
           'AI Technical Analysis',
+          textAlign: TextAlign.center,
           style: TextStyle(
             fontSize: isSmallMobile ? 22 : (isTablet ? 40 : 32),
             fontWeight: FontWeight.bold,
@@ -846,116 +874,166 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   }
 
   Widget _buildTradingActionButton() {
-    final screenHeight = MediaQuery.of(context).size.height;
-    final screenWidth = MediaQuery.of(context).size.width;
-    // Improved tablet detection - iPad Air 11-inch is 1180x820
-    final isTablet = screenWidth > 600 || screenHeight > 900;
-    
-    return Container(
-      width: double.infinity,
-      child: Material(
-        color: Colors.transparent,
-        borderRadius: BorderRadius.circular(16),
-        child: InkWell(
-          borderRadius: BorderRadius.circular(16),
-          onTap: () {
-            _openTradingPlatform();
-          },
-          child: Container(
-            padding: EdgeInsets.symmetric(
-              horizontal: isTablet ? 24 : 16,
-              vertical: isTablet ? 14 : 8,
-            ),
-            decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                colors: [
-                  Color(0xFFFFD700),
-                  Color(0xFFFF8C00),
-                  Color(0xFFFF6347),
-                ],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        // Get actual available space from constraints
+        final availableHeight = constraints.maxHeight;
+        final availableWidth = constraints.maxWidth;
+        
+        // Define responsive breakpoints based on Flutter best practices
+        final isCompact = availableWidth < 600;
+        final isMedium = availableWidth >= 600 && availableWidth < 840;
+        final isExpanded = availableWidth >= 840;
+        
+        // Calculate responsive sizes based on available space
+        final horizontalPadding = isCompact ? 16.0 : (isMedium ? 20.0 : 24.0);
+        final iconSize = isCompact ? 18.0 : (isMedium ? 20.0 : 24.0);
+        final titleFontSize = isCompact ? 16.0 : (isMedium ? 18.0 : 20.0);
+        final subtitleFontSize = isCompact ? 11.0 : (isMedium ? 12.0 : 14.0);
+        
+        // Determine if we have enough height for two-line layout
+        final hasEnoughHeight = availableHeight >= 60;
+        final shouldShowSubtitle = hasEnoughHeight && !isCompact;
+        
+        // Calculate padding based on available height
+        final verticalPadding = hasEnoughHeight ? 
+          (isCompact ? 8.0 : (isMedium ? 12.0 : 16.0)) : 
+          6.0;
+        
+        return Container(
+          width: double.infinity,
+          constraints: BoxConstraints(
+            minHeight: 44.0, // Minimum touch target
+            maxHeight: availableHeight,
+          ),
+          child: Material(
+            color: Colors.transparent,
+            borderRadius: BorderRadius.circular(16),
+            child: InkWell(
               borderRadius: BorderRadius.circular(16),
-              border: Border.all(
-                color: const Color(0xFFFFD700).withOpacity(0.5),
-                width: 2,
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: const Color(0xFFFFD700).withOpacity(0.4),
-                  blurRadius: 16,
-                  offset: const Offset(0, 6),
+              onTap: () {
+                _openTradingPlatform();
+              },
+              child: Container(
+                padding: EdgeInsets.symmetric(
+                  horizontal: horizontalPadding,
+                  vertical: verticalPadding,
                 ),
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.3),
-                  blurRadius: 12,
-                  offset: const Offset(0, 4),
-                ),
-              ],
-            ),
-            child: Row(
-              children: [
-                Container(
-                  padding: EdgeInsets.all(isTablet ? 12 : 8),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.2),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: Icon(
-                    Icons.rocket_launch,
-                    color: Colors.white,
-                    size: isTablet ? 24 : 18,
-                  ),
-                ),
-                SizedBox(width: isTablet ? 16 : 10),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        'Start Trading',
-                        style: TextStyle(
-                          fontSize: isTablet ? 22 : 16,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.white,
-                          height: 1.0,
-                        ),
-                      ),
-                      const SizedBox(height: 1),
-                      Text(
-                        'Turn insights into profits',
-                        style: TextStyle(
-                          fontSize: isTablet ? 15 : 11,
-                          color: Colors.white,
-                          fontWeight: FontWeight.w500,
-                          height: 1.0,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: [
+                      Color(0xFFFFD700),
+                      Color(0xFFFF8C00),
+                      Color(0xFFFF6347),
                     ],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
                   ),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
+                    color: const Color(0xFFFFD700).withOpacity(0.5),
+                    width: 2,
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: const Color(0xFFFFD700).withOpacity(0.4),
+                      blurRadius: 16,
+                      offset: const Offset(0, 6),
+                    ),
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.3),
+                      blurRadius: 12,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
                 ),
-                Container(
-                  padding: EdgeInsets.all(isTablet ? 8 : 5),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.2),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Icon(
-                    Icons.arrow_forward,
-                    color: Colors.white,
-                    size: isTablet ? 18 : 14,
-                  ),
+                child: Row(
+                  children: [
+                    // Icon container
+                    Container(
+                      padding: EdgeInsets.all(isCompact ? 6.0 : 8.0),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.2),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Icon(
+                        Icons.rocket_launch,
+                        color: Colors.white,
+                        size: iconSize,
+                      ),
+                    ),
+                    SizedBox(width: isCompact ? 8.0 : 12.0),
+                    
+                    // Text content - use Flexible to prevent overflow
+                    Flexible(
+                      child: shouldShowSubtitle ? 
+                        // Two-line layout when there's enough space
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              'Start Trading',
+                              style: TextStyle(
+                                fontSize: titleFontSize,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.white,
+                                height: 1.2,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              'Turn insights into profits',
+                              style: TextStyle(
+                                fontSize: subtitleFontSize,
+                                color: Colors.white.withOpacity(0.9),
+                                fontWeight: FontWeight.w500,
+                                height: 1.2,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ],
+                        ) :
+                        // Single-line layout for compact spaces
+                        Text(
+                          'Start Trading',
+                          style: TextStyle(
+                            fontSize: titleFontSize,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                            height: 1.2,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                    ),
+                    
+                    SizedBox(width: isCompact ? 8.0 : 12.0),
+                    
+                    // Arrow icon
+                    Container(
+                      padding: EdgeInsets.all(isCompact ? 4.0 : 6.0),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.2),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Icon(
+                        Icons.arrow_forward,
+                        color: Colors.white,
+                        size: isCompact ? 14.0 : 16.0,
+                      ),
+                    ),
+                  ],
                 ),
-              ],
+              ),
             ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 

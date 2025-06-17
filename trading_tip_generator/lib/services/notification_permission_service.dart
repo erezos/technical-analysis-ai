@@ -48,8 +48,11 @@ class NotificationPermissionService {
     }
   }
 
-  /// Show the beautiful custom notification permission dialog
+  /// Show the beautiful custom notification permission dialog - iPhone 13 mini optimized
   static Future<void> showPermissionDialog(BuildContext context) async {
+    final screenSize = MediaQuery.of(context).size;
+    final isSmallScreen = screenSize.width <= 375 && screenSize.height <= 812; // iPhone 13 mini detection
+    
     return showDialog<void>(
       context: context,
       barrierDismissible: true,
@@ -57,6 +60,10 @@ class NotificationPermissionService {
         return Dialog(
           backgroundColor: Colors.transparent,
           child: Container(
+            constraints: BoxConstraints(
+              maxWidth: isSmallScreen ? screenSize.width * 0.9 : 400,
+              maxHeight: isSmallScreen ? screenSize.height * 0.75 : 600,
+            ),
             decoration: BoxDecoration(
               gradient: const LinearGradient(
                 begin: Alignment.topLeft,
@@ -67,7 +74,7 @@ class NotificationPermissionService {
                   Color(0xFF1A1A1A),
                 ],
               ),
-              borderRadius: BorderRadius.circular(24),
+              borderRadius: BorderRadius.circular(isSmallScreen ? 16 : 24),
               border: Border.all(
                 color: const Color(0xFF00D4AA).withOpacity(0.3),
                 width: 1,
@@ -75,91 +82,91 @@ class NotificationPermissionService {
               boxShadow: [
                 BoxShadow(
                   color: Colors.black.withOpacity(0.8),
-                  blurRadius: 30,
-                  offset: const Offset(0, 15),
+                  blurRadius: isSmallScreen ? 20 : 30,
+                  offset: Offset(0, isSmallScreen ? 10 : 15),
                 ),
               ],
             ),
             child: Padding(
-              padding: const EdgeInsets.all(28.0),
+              padding: EdgeInsets.all(isSmallScreen ? 20.0 : 28.0),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   // Icon with glow effect
                   Container(
-                    padding: const EdgeInsets.all(16),
+                    padding: EdgeInsets.all(isSmallScreen ? 12 : 16),
                     decoration: BoxDecoration(
                       gradient: const LinearGradient(
                         colors: [Color(0xFF00D4AA), Color(0xFF00A688)],
                       ),
-                      borderRadius: BorderRadius.circular(20),
+                      borderRadius: BorderRadius.circular(isSmallScreen ? 16 : 20),
                       boxShadow: [
                         BoxShadow(
                           color: const Color(0xFF00D4AA).withOpacity(0.4),
-                          blurRadius: 20,
-                          offset: const Offset(0, 8),
+                          blurRadius: isSmallScreen ? 15 : 20,
+                          offset: Offset(0, isSmallScreen ? 6 : 8),
                         ),
                       ],
                     ),
-                    child: const Icon(
+                    child: Icon(
                       Icons.notifications_active,
                       color: Colors.white,
-                      size: 32,
+                      size: isSmallScreen ? 24 : 32,
                     ),
                   ),
                   
-                  const SizedBox(height: 24),
+                  SizedBox(height: isSmallScreen ? 16 : 24),
                   
                   // Title
-                  const Text(
+                  Text(
                     '🚀 Never Miss a Signal!',
                     style: TextStyle(
-                      fontSize: 22,
+                      fontSize: isSmallScreen ? 18 : 22,
                       fontWeight: FontWeight.bold,
                       color: Colors.white,
                     ),
                     textAlign: TextAlign.center,
                   ),
                   
-                  const SizedBox(height: 16),
+                  SizedBox(height: isSmallScreen ? 12 : 16),
                   
                   // Description
                   Text(
                     'Get instant alerts when fresh AI trading signals are ready. Stay ahead of the market with timely notifications.',
                     style: TextStyle(
-                      fontSize: 16,
+                      fontSize: isSmallScreen ? 13 : 16,
                       color: Colors.grey[300],
-                      height: 1.4,
+                      height: 1.3,
                     ),
                     textAlign: TextAlign.center,
                   ),
                   
-                  const SizedBox(height: 8),
+                  SizedBox(height: isSmallScreen ? 8 : 12),
                   
-                  // Benefits
+                  // Benefits - Compact for small screens
                   Container(
-                    padding: const EdgeInsets.all(16),
+                    padding: EdgeInsets.all(isSmallScreen ? 12 : 16),
                     decoration: BoxDecoration(
                       color: const Color(0xFF00D4AA).withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(12),
+                      borderRadius: BorderRadius.circular(isSmallScreen ? 8 : 12),
                       border: Border.all(
                         color: const Color(0xFF00D4AA).withOpacity(0.3),
                       ),
                     ),
                     child: Column(
                       children: [
-                        _buildBenefitRow('📈', 'Real-time trading opportunities'),
-                        const SizedBox(height: 8),
-                        _buildBenefitRow('⚡', 'AI-powered market insights'),
-                        const SizedBox(height: 8),
-                        _buildBenefitRow('🎯', 'Perfect timing for entries'),
+                        _buildBenefitRow('📈', 'Real-time trading opportunities', isSmallScreen),
+                        SizedBox(height: isSmallScreen ? 4 : 8),
+                        _buildBenefitRow('⚡', 'AI-powered market insights', isSmallScreen),
+                        SizedBox(height: isSmallScreen ? 4 : 8),
+                        _buildBenefitRow('🎯', 'Perfect timing for entries', isSmallScreen),
                       ],
                     ),
                   ),
                   
-                  const SizedBox(height: 24),
+                  SizedBox(height: isSmallScreen ? 16 : 24),
                   
-                  // Buttons
+                  // Buttons - Responsive sizing with proper text constraints
                   Row(
                     children: [
                       // Maybe Later button
@@ -167,27 +174,34 @@ class NotificationPermissionService {
                         child: TextButton(
                           onPressed: () => Navigator.of(context).pop(),
                           style: TextButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(vertical: 16),
+                            padding: EdgeInsets.symmetric(
+                              vertical: isSmallScreen ? 14 : 16,
+                              horizontal: 8,
+                            ),
                             shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
+                              borderRadius: BorderRadius.circular(isSmallScreen ? 8 : 12),
                               side: BorderSide(
                                 color: Colors.grey[600]!,
                                 width: 1,
                               ),
                             ),
                           ),
-                          child: Text(
-                            'Maybe Later',
-                            style: TextStyle(
-                              color: Colors.grey[400],
-                              fontSize: 16,
-                              fontWeight: FontWeight.w500,
+                          child: FittedBox(
+                            fit: BoxFit.scaleDown,
+                            child: Text(
+                              'Maybe Later',
+                              style: TextStyle(
+                                color: Colors.grey[400],
+                                fontSize: isSmallScreen ? 12 : 16,
+                                fontWeight: FontWeight.w500,
+                              ),
+                              textAlign: TextAlign.center,
                             ),
                           ),
                         ),
                       ),
                       
-                      const SizedBox(width: 16),
+                      SizedBox(width: isSmallScreen ? 8 : 16),
                       
                       // Enable Notifications button
                       Expanded(
@@ -200,18 +214,25 @@ class NotificationPermissionService {
                           style: ElevatedButton.styleFrom(
                             backgroundColor: const Color(0xFF00D4AA),
                             foregroundColor: Colors.white,
-                            padding: const EdgeInsets.symmetric(vertical: 16),
+                            padding: EdgeInsets.symmetric(
+                              vertical: isSmallScreen ? 14 : 16,
+                              horizontal: 8,
+                            ),
                             shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
+                              borderRadius: BorderRadius.circular(isSmallScreen ? 8 : 12),
                             ),
                             elevation: 8,
                             shadowColor: const Color(0xFF00D4AA).withOpacity(0.4),
                           ),
-                          child: const Text(
-                            'Never Miss a Signal',
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
+                          child: FittedBox(
+                            fit: BoxFit.scaleDown,
+                            child: Text(
+                              'Never Miss a Signal',
+                              style: TextStyle(
+                                fontSize: isSmallScreen ? 12 : 16,
+                                fontWeight: FontWeight.bold,
+                              ),
+                              textAlign: TextAlign.center,
                             ),
                           ),
                         ),
@@ -227,21 +248,21 @@ class NotificationPermissionService {
     );
   }
 
-  /// Helper widget for benefit rows
-  static Widget _buildBenefitRow(String emoji, String text) {
+  /// Helper widget for benefit rows - responsive sizing
+  static Widget _buildBenefitRow(String emoji, String text, bool isSmallScreen) {
     return Row(
       children: [
         Text(
           emoji,
-          style: const TextStyle(fontSize: 16),
+          style: TextStyle(fontSize: isSmallScreen ? 12 : 16),
         ),
-        const SizedBox(width: 12),
+        SizedBox(width: isSmallScreen ? 6 : 12),
         Expanded(
           child: Text(
             text,
-            style: const TextStyle(
+            style: TextStyle(
               color: Colors.white,
-              fontSize: 14,
+              fontSize: isSmallScreen ? 11 : 14,
               fontWeight: FontWeight.w500,
             ),
           ),
@@ -277,28 +298,32 @@ class NotificationPermissionService {
           backgroundColor = Colors.grey;
       }
       
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(message),
-          backgroundColor: backgroundColor,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-          duration: const Duration(seconds: 3),
-        ),
-      );
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(message),
+            backgroundColor: backgroundColor,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
       
       print('🔔 Notification permission result: $status');
     } catch (e) {
       print('❌ Error requesting notification permission: $e');
       
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text('❌ Could not request notification permission'),
-          backgroundColor: Colors.red,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-        ),
-      );
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('❌ Could not request notification permission'),
+            backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          ),
+        );
+      }
     }
   }
 } 
