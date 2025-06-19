@@ -22,7 +22,6 @@ class PremiumGlassmorphismNav extends StatefulWidget {
 class _PremiumGlassmorphismNavState extends State<PremiumGlassmorphismNav>
     with TickerProviderStateMixin {
   late AnimationController _glowController;
-  late Animation<double> _glowAnimation;
 
   @override
   void initState() {
@@ -32,10 +31,6 @@ class _PremiumGlassmorphismNavState extends State<PremiumGlassmorphismNav>
     _glowController = AnimationController(
       duration: const Duration(milliseconds: 2000),
       vsync: this,
-    );
-    _glowAnimation = CurvedAnimation(
-      parent: _glowController,
-      curve: Curves.easeInOut,
     );
 
     _glowController.repeat(reverse: true);
@@ -132,6 +127,17 @@ class _PremiumGlassmorphismNavState extends State<PremiumGlassmorphismNav>
                         index: 1,
                         label: 'Hot Board',
                         isSelected: widget.currentIndex == 1,
+                        navHeight: navHeight,
+                        isAndroid: isAndroid,
+                      ),
+                    ),
+                    
+                    // Education Tab (NEW)
+                    Expanded(
+                      child: _buildNavigationTab(
+                        index: 2,
+                        label: 'Education',
+                        isSelected: widget.currentIndex == 2,
                         navHeight: navHeight,
                         isAndroid: isAndroid,
                       ),
@@ -257,8 +263,9 @@ class _PremiumGlassmorphismNavState extends State<PremiumGlassmorphismNav>
 
   double _calculateFontSize(double navHeight) {
     // Responsive font size that scales with navigation height
-    final baseFontSize = navHeight * 0.25;
-    return baseFontSize.clamp(14.0, 20.0);
+    // Slightly smaller to accommodate 3 tabs
+    final baseFontSize = navHeight * 0.22;
+    return baseFontSize.clamp(12.0, 18.0);
   }
 
   double _calculateTouchTarget(bool isAndroid) {
@@ -268,6 +275,7 @@ class _PremiumGlassmorphismNavState extends State<PremiumGlassmorphismNav>
 
   double _calculateTabPadding(double navHeight) {
     // Responsive padding that maintains proportions
-    return (navHeight * 0.08).clamp(4.0, 12.0);
+    // Reduced for 3 tabs
+    return (navHeight * 0.06).clamp(2.0, 8.0);
   }
 } 
