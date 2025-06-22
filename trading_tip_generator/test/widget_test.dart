@@ -7,12 +7,12 @@ void main() {
   testWidgets('Trading app smoke test', (WidgetTester tester) async {
     // Build a minimal app to test basic functionality
     await tester.pumpWidget(
-      const MaterialApp(
+      MaterialApp(
         home: Scaffold(
           appBar: AppBar(
-            title: Text('Trading Tip Generator AI'),
+            title: const Text('Trading Tip Generator AI'),
           ),
-          body: Center(
+          body: const Center(
             child: Text('AI Trading Tips'),
           ),
         ),

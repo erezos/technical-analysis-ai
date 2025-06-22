@@ -5,15 +5,15 @@ import 'disclaimer_page.dart';
 import 'providers/trading_tips_provider.dart';
 import 'screens/trading_tip_screen.dart';
 import 'screens/hot_board_screen_enhanced.dart';
-import 'models/hot_board_models.dart';
-import 'services/hot_board_service.dart';
+import 'screens/lesson_screen.dart';
 import 'services/notification_service.dart';
 import 'services/stats_service.dart';
 import 'services/trading_link_service.dart';
 import 'services/notification_permission_service.dart';
-import 'utils/responsive_utils.dart';
-import 'utils/trading_colors.dart';
+import 'services/educational_service.dart';
 import 'widgets/premium_glassmorphism_nav.dart';
+import 'widgets/responsive/responsive_layout.dart';
+import 'widgets/education_category_button.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -27,6 +27,9 @@ void main() async {
   
   // Initialize trading link
   await TradingLinkService.initializeTradingLinkForSession();
+  
+  // Initialize educational content (NEW)
+  await EducationalService.initializeEducationalContent();
   
   runApp(const MyApp());
 }
@@ -167,12 +170,12 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         return _buildTradingTipsScreen(screenSize, isSmallMobile, isTablet);
       case 1: // Hot Board
         return const HotBoardScreenEnhanced();
+      case 2: // Education
+        return _buildEducationScreen(screenSize, isSmallMobile, isTablet);
       default:
         return _buildTradingTipsScreen(screenSize, isSmallMobile, isTablet);
     }
   }
-
-
 
   Widget _buildTradingTipsScreen(Size screenSize, bool isSmallMobile, bool isTablet) {
     return Container(
@@ -212,72 +215,35 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     );
   }
 
-    Widget _buildBottomNavigationBar(bool isSmallMobile, bool isTablet) {
-    final screenHeight = MediaQuery.of(context).size.height;
-    final screenWidth = MediaQuery.of(context).size.width;
-    final bottomPadding = MediaQuery.of(context).padding.bottom;
-    
-    // Calculate responsive navigation height based on screen size
-    final baseNavHeight = screenHeight * 0.08; // 8% of screen height
-    final minNavHeight = 50.0;
-    final maxNavHeight = 80.0;
-    final navHeight = baseNavHeight.clamp(minNavHeight, maxNavHeight);
-    
-    return Container(
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            const Color(0xFF1E1E1E),
-            const Color(0xFF2A2A2A),
-          ],
-        ),
-        border: Border(
-          top: BorderSide(
-            color: const Color(0xFF00D4AA).withOpacity(0.2),
-            width: 1,
-          ),
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.3),
-            blurRadius: 8,
-            offset: const Offset(0, -2),
-          ),
-        ],
-      ),
-      child: SafeArea(
-        child: Container(
-          height: navHeight,
-          child: Row(
+  Widget _buildEducationScreen(Size screenSize, bool isSmallMobile, bool isTablet) {
+    return ResponsiveLayout(
+      mobile: _buildEducationMobile(),
+      tablet: _buildEducationTablet(),
+    );
+  }
+
+  Widget _buildEducationMobile() {
+    return SafeArea(
+      child: SingleChildScrollView(
+        child: ResponsivePadding(
+          mobilePadding: 12,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // AI Tips Tab
-              Expanded(
-                child: _buildResponsiveNavItem(
-                  icon: Icons.analytics_outlined,
-                  selectedIcon: Icons.analytics,
-                  label: 'AI Tips',
-                  isSelected: _currentIndex == 0,
-                  onTap: () => setState(() => _currentIndex = 0),
-                  screenHeight: screenHeight,
-                  screenWidth: screenWidth,
-                  navHeight: navHeight,
+              _buildEducationHeader(),
+              const SizedBox(height: 16),
+              _buildEducationStats(),
+              const SizedBox(height: 20),
+              const ResponsiveText(
+                'Learning Categories',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
                 ),
               ),
-              // Hot Board Tab
-              Expanded(
-                child: _buildResponsiveNavItem(
-                  icon: Icons.local_fire_department_outlined,
-                  selectedIcon: Icons.local_fire_department,
-                  label: 'Hot Board',
-                  isSelected: _currentIndex == 1,
-                  onTap: () => setState(() => _currentIndex = 1),
-                  screenHeight: screenHeight,
-                  screenWidth: screenWidth,
-                  navHeight: navHeight,
-                ),
-              ),
+              const SizedBox(height: 16),
+              _buildEducationCategoriesMobile(),
             ],
           ),
         ),
@@ -285,142 +251,300 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     );
   }
 
-  Widget _buildResponsiveNavItem({
-    required IconData icon,
-    required IconData selectedIcon,
-    required String label,
-    required bool isSelected,
-    required VoidCallback onTap,
-    required double screenHeight,
-    required double screenWidth,
-    required double navHeight,
-  }) {
-    final selectedColor = Theme.of(context).colorScheme.primary;
-    final unselectedColor = Colors.grey[400]!;
-    
-    // Calculate ALL sizes responsively based on screen dimensions
-    final iconSize = (navHeight * 0.35).clamp(16.0, 28.0);
-    final baseFontSize = (navHeight * 0.18).clamp(8.0, 14.0);
-    final responsiveVerticalPadding = (navHeight * 0.08).clamp(1.0, 6.0); // Responsive vertical padding
-    final responsiveSpacing = (navHeight * 0.04).clamp(0.5, 3.0); // Responsive spacing
-    final responsiveHorizontalPadding = (screenWidth * 0.02).clamp(4.0, 12.0); // Responsive horizontal padding
-    
-    // Calculate available width more precisely for all screen sizes
-    final tabWidth = screenWidth / 2; // Each tab gets half the screen
-    final totalHorizontalPadding = responsiveHorizontalPadding * 2; // Left + right padding
-    final availableTextWidth = tabWidth - totalHorizontalPadding - (screenWidth * 0.02); // Extra safety margin
-    final maxTextWidth = availableTextWidth.clamp(60.0, 200.0); // Ensure reasonable bounds
-    
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-                  child: Container(
-            padding: EdgeInsets.symmetric(
-              vertical: responsiveVerticalPadding,
-              horizontal: responsiveHorizontalPadding,
-            ),
-                        child: Column(
-              mainAxisSize: MainAxisSize.min,
-              mainAxisAlignment: MainAxisAlignment.center,
+  Widget _buildEducationTablet() {
+    return SafeArea(
+      child: SingleChildScrollView(
+        child: ResponsivePadding(
+          mobilePadding: 24,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _buildEducationHeader(),
+              const SizedBox(height: 20),
+              _buildEducationStats(),
+              const SizedBox(height: 24),
+              const ResponsiveText(
+                'Learning Categories',
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                ),
+              ),
+              const SizedBox(height: 20),
+              _buildEducationCategoriesTablet(),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildEducationHeader() {
+    return Container(
+      width: double.infinity,
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            Color(0xFF1E1E1E),
+            Color(0xFF2A2A2A),
+          ],
+        ),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: const Color(0xFF00D4AA).withOpacity(0.2),
+          width: 1,
+        ),
+      ),
+      child: ResponsivePadding(
+        mobilePadding: 16,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
               children: [
-                // Flexible icon section
-                Flexible(
-                  flex: 3,
-                  child: Center(
-                    child: navHeight > 60 // Add background for larger nav bars
-                        ? Container(
-                            padding: EdgeInsets.all((navHeight * 0.08).clamp(4.0, 8.0)),
-                            decoration: BoxDecoration(
-                              color: isSelected 
-                                  ? selectedColor.withOpacity(0.15)
-                                  : Colors.transparent,
-                              borderRadius: BorderRadius.circular(12),
-                              border: isSelected 
-                                  ? Border.all(
-                                      color: selectedColor.withOpacity(0.3),
-                                      width: 1,
-                                    )
-                                  : null,
-                            ),
-                            child: Icon(
-                              isSelected ? selectedIcon : icon,
-                              color: isSelected ? selectedColor : unselectedColor,
-                              size: iconSize,
-                            ),
-                          )
-                        : Icon( // Simple icon for smaller nav bars
-                            isSelected ? selectedIcon : icon,
-                            color: isSelected ? selectedColor : unselectedColor,
-                            size: iconSize,
-                          ),
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF00D4AA).withOpacity(0.2),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Icon(
+                    Icons.school,
+                    color: Color(0xFF00D4AA),
+                    size: 24,
                   ),
                 ),
-                
-                // Flexible text section
-                Flexible(
-                  flex: 2,
-                  child: Container(
-                    width: maxTextWidth,
-                    child: LayoutBuilder(
-                      builder: (context, constraints) {
-                        // Calculate optimal font size based on available space
-                        final textPainter = TextPainter(
-                          text: TextSpan(
-                            text: label,
-                            style: TextStyle(
-                              fontSize: baseFontSize,
-                              fontWeight: FontWeight.w600, // Use bold to measure worst case
-                            ),
-                          ),
-                          maxLines: 1,
-                          textDirection: TextDirection.ltr,
-                        );
-                        textPainter.layout();
-                        
-                        // Calculate scale factor if text is too wide
-                        final scaleFactor = textPainter.width > constraints.maxWidth 
-                            ? constraints.maxWidth / textPainter.width 
-                            : 1.0;
-                        
-                        final responsiveFontSize = (baseFontSize * scaleFactor).clamp(6.0, baseFontSize);
-                        
-                        return Center(
-                          child: Text(
-                            label,
-                            style: TextStyle(
-                              color: isSelected ? selectedColor : unselectedColor,
-                              fontSize: responsiveFontSize,
-                              fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
-                            ),
-                            textAlign: TextAlign.center,
-                            maxLines: 1,
-                            overflow: TextOverflow.clip,
-                          ),
-                        );
-                      },
-                    ),
-                  ),
-                ),
-                
-                // Optional flexible indicator for larger screens
-                if (isSelected && navHeight > 65) // Only show on very large nav bars
-                  Flexible(
-                    flex: 1,
-                    child: Center(
-                      child: Container(
-                        height: (navHeight * 0.03).clamp(1.0, 2.5), // Responsive indicator height
-                        width: (screenWidth * 0.03).clamp(8.0, 16.0), // Responsive indicator width
-                        decoration: BoxDecoration(
-                          color: selectedColor,
-                          borderRadius: BorderRadius.circular(1),
+                const SizedBox(width: 12),
+                const Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      ResponsiveText(
+                        'Trading Education',
+                        style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
                         ),
+                      ),
+                      ResponsiveText(
+                        'Learn trading fundamentals & advanced strategies',
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: Colors.grey,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: const Color(0xFF00D4AA).withOpacity(0.1),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(
+                  color: const Color(0xFF00D4AA).withOpacity(0.3),
+                  width: 1,
+                ),
+              ),
+              child: const Row(
+                children: [
+                  Icon(
+                    Icons.info_outline,
+                    color: Color(0xFF00D4AA),
+                    size: 16,
+                  ),
+                  SizedBox(width: 8),
+                  Expanded(
+                    child: ResponsiveText(
+                      'Educational content for learning purposes only. Not financial advice.',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Color(0xFF00D4AA),
                       ),
                     ),
                   ),
-              ],
+                ],
+              ),
             ),
+          ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildEducationStats() {
+    return Row(
+      children: [
+        Expanded(child: _buildStatCard('Lessons', '15', Icons.book)),
+        const SizedBox(width: 12),
+        Expanded(child: _buildStatCard('Categories', '7', Icons.category)),
+        const SizedBox(width: 12),
+        Expanded(child: _buildStatCard('Difficulty', 'All Levels', Icons.school)),
+      ],
+    );
+  }
+
+  Widget _buildStatCard(String label, String value, IconData icon) {
+    return Container(
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            Color(0xFF1E1E1E),
+            Color(0xFF2A2A2A),
+          ],
+        ),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: Colors.white.withOpacity(0.1),
+          width: 1,
+        ),
+      ),
+      child: ResponsivePadding(
+        mobilePadding: 12,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              icon,
+              color: const Color(0xFF00D4AA),
+              size: 20,
+            ),
+            const SizedBox(height: 6),
+            ResponsiveText(
+              value,
+              style: const TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                color: Colors.white,
+              ),
+            ),
+            const SizedBox(height: 4),
+            ResponsiveText(
+              label,
+              style: const TextStyle(
+                fontSize: 12,
+                color: Colors.grey,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildEducationCategoriesMobile() {
+    final categories = _getEducationCategories();
+    
+    return Column(
+      children: categories.map((category) => 
+        Padding(
+          padding: const EdgeInsets.only(bottom: 12),
+          child: _buildEducationCategoryCard(category),
+        )
+      ).toList(),
+    );
+  }
+
+  Widget _buildEducationCategoriesTablet() {
+    final categories = _getEducationCategories();
+    
+    return Column(
+      children: categories.map((category) => 
+        Padding(
+          padding: const EdgeInsets.only(bottom: 16),
+          child: _buildEducationCategoryCard(category),
+        )
+      ).toList(),
+    );
+  }
+
+  Widget _buildEducationCategoryCard(Map<String, dynamic> category) {
+    return EducationCategoryButton(
+      title: category['title'],
+      description: category['description'],
+      icon: category['icon'],
+      lessons: category['lessons'],
+      onTap: () => _navigateToLessons(category['title']),
+      primaryColor: category['primaryColor'],
+      accentColor: category['accentColor'],
+    );
+  }
+
+  List<Map<String, dynamic>> _getEducationCategories() {
+    return [
+      {
+        'title': 'Technical Analysis Basics',
+        'description': 'Learn chart patterns, indicators & analysis fundamentals',
+        'icon': Icons.analytics_outlined,
+        'lessons': '6',
+        'primaryColor': const Color(0xFF00D4AA),
+        'accentColor': const Color(0xFF6C5CE7),
+      },
+      {
+        'title': 'Chart Reading',
+        'description': 'Master candlesticks & chart pattern recognition',
+        'icon': Icons.candlestick_chart_outlined,
+        'lessons': '3',
+        'primaryColor': const Color(0xFF00D4AA),
+        'accentColor': const Color(0xFFFF6B6B),
+      },
+      {
+        'title': 'Technical Indicators',
+        'description': 'RSI, MACD, moving averages & momentum indicators',
+        'icon': Icons.trending_up_outlined,
+        'lessons': '4',
+        'primaryColor': const Color(0xFF00D4AA),
+        'accentColor': const Color(0xFF4ECDC4),
+      },
+      {
+        'title': 'Risk Management',
+        'description': 'Position sizing, stop losses & portfolio protection',
+        'icon': Icons.security_outlined,
+        'lessons': '2',
+        'primaryColor': const Color(0xFF00D4AA),
+        'accentColor': const Color(0xFFFFBE0B),
+      },
+      {
+        'title': 'Trading Psychology',
+        'description': 'Mental discipline, emotional control & mindset',
+        'icon': Icons.psychology_outlined,
+        'lessons': '1',
+        'primaryColor': const Color(0xFF00D4AA),
+        'accentColor': const Color(0xFF8338EC),
+      },
+      {
+        'title': 'Strategy Development',
+        'description': 'Build, backtest & optimize trading strategies',
+        'icon': Icons.architecture_outlined,
+        'lessons': '2',
+        'primaryColor': const Color(0xFF00D4AA),
+        'accentColor': const Color(0xFF3A86FF),
+      },
+      {
+        'title': 'Reference',
+        'description': 'Quick reference guides & trading cheat sheets',
+        'icon': Icons.library_books_outlined,
+        'lessons': '1',
+        'primaryColor': const Color(0xFF00D4AA),
+        'accentColor': const Color(0xFF06FFA5),
+      },
+    ];
+  }
+
+  void _navigateToLessons(String category) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => LessonScreen(category: category),
       ),
     );
   }

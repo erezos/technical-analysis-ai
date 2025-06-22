@@ -16,7 +16,7 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 # https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html
 # In Windows, build-name is used as the major, minor, and patch parts
 # of the product and file versions while build-number is used as the build suffix.
-version: 1.1.1+4
+version: 1.1.2+5
 
 environment:
   sdk: '>=3.2.3 <4.0.0'
@@ -42,6 +42,7 @@ dependencies:
   permission_handler: ^11.1.0  # Custom notification permission dialog
   url_launcher: ^6.2.2  # Launch trading platform URLs
   shared_preferences: ^2.2.2  # Store first-session tracking
+  http: ^1.2.0  # HTTP requests for geolocation
 
 
   # The following adds the Cupertino Icons font to your application.
@@ -60,6 +61,10 @@ dev_dependencies:
   
   # Icon generator for automated app icon creation
   flutter_launcher_icons: ^0.13.1
+  
+  # Testing dependencies
+  mockito: ^5.4.4  # For mocking dependencies
+  build_runner: ^2.4.8  # For generating mocks
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
