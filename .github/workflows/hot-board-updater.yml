@@ -2,8 +2,9 @@ name: Update Hot Board Data
 
 on:
   schedule:
-    # Runs every 15 minutes, all day, every day
-    - cron: '*/15 * * * *'
+    # Runs every 15 minutes from 8:30 AM to 5:00 PM EST (13:30-22:00 UTC), Mon-Fri
+    # 1 hour before market open (9:30 AM EST) to 1 hour after market close (4:00 PM EST)
+    - cron: '*/15 13-22 * * 1-5'
   workflow_dispatch: # Allows manual trigger
 
 jobs:
