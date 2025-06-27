@@ -220,4 +220,32 @@ out/
 .Spotlight-V100
 .Trashes
 ehthumbs.db
-Thumbs.db 
+Thumbs.db
+
+# Security - API Keys and Tokens
+**/secrets.json
+**/config/secrets.js
+**/*_secret*
+**/*_token*
+**/*_key*
+**/api_keys.py
+**/credentials.json
+**/.env.production
+**/.env.staging
+
+# AI/ML Generation Scripts with potential tokens
+**/generate_*_with_tokens.py
+**/create_*_with_api.py
+**/*_generation_script.py
+
+# MCP Flutter (embedded git repo)
+mcp_flutter/
+
+# Generated AI assets (keep the assets, ignore generation scripts)
+generated_icons/
+generated-assets/
+generated-trading/
+
+# Replicate/AI API scripts that might contain tokens
+replicate_env/
+logo_env/
