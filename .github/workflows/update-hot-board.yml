@@ -1,0 +1,98 @@
+name: Update Hot Board Data
+
+on:
+  schedule:
+    # Runs every 15 minutes from 8:30 AM to 5:00 PM EST (13:30-22:00 UTC), Mon-Fri
+    # 1 hour before market open (9:30 AM EST) to 1 hour after market close (4:00 PM EST)
+    - cron: '*/15 13-22 * * 1-5'
+  workflow_dispatch: # Allows manual trigger
+
+jobs:
+  update-hot-board:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+      
+    - name: Setup Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: '18'
+        
+    - name: Install dependencies
+      run: |
+        npm init -y
+        npm install firebase-admin
+        
+    - name: Update Hot Board Data
+      env:
+        FMP_API_KEY: ${{ secrets.FMP_API_KEY }}
+        FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+      run: |
+        cat > update-hot-board.js << 'EOF'
+        const admin = require('firebase-admin');
+
+        // Initialize Firebase Admin
+        const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
+        admin.initializeApp({
+          credential: admin.credential.cert(serviceAccount)
+        });
+
+        const db = admin.firestore();
+
+        async function updateHotBoard() {
+          try {
+            console.log('🔥 Fetching market movers...');
+            
+            // Fetch top gainers
+            const gainersResponse = await fetch(
+              `https://financialmodelingprep.com/api/v3/stock_market/gainers?apikey=${process.env.FMP_API_KEY}`
+            );
+            const gainers = await gainersResponse.json();
+            
+            // Fetch top losers
+            const losersResponse = await fetch(
+              `https://financialmodelingprep.com/api/v3/stock_market/losers?apikey=${process.env.FMP_API_KEY}`
+            );
+            const losers = await losersResponse.json();
+            
+            // Prepare data
+            const hotBoardData = {
+              gainers: gainers.slice(0, 3).map(stock => ({
+                symbol: stock.symbol,
+                name: stock.name,
+                price: stock.price,
+                change: stock.change,
+                changePercentage: stock.changesPercentage,
+                logoUrl: `assets/logos/stocks/${stock.symbol}.png`
+              })),
+              losers: losers.slice(0, 3).map(stock => ({
+                symbol: stock.symbol,
+                name: stock.name,
+                price: stock.price,
+                change: stock.change,
+                changePercentage: stock.changesPercentage,
+                logoUrl: `assets/logos/stocks/${stock.symbol}.png`
+              })),
+              lastUpdated: admin.firestore.FieldValue.serverTimestamp(),
+              marketStatus: 'open' // You can enhance this later
+            };
+            
+            // Save to Firestore
+            await db.collection('hotBoard').doc('current').set(hotBoardData);
+            
+            console.log('✅ Hot Board updated successfully!');
+            console.log(`📈 Top Gainers: ${gainers.slice(0, 3).map(s => s.symbol).join(', ')}`);
+            console.log(`📉 Top Losers: ${losers.slice(0, 3).map(s => s.symbol).join(', ')}`);
+            
+          } catch (error) {
+            console.error('❌ Error updating Hot Board:', error);
+            process.exit(1);
+          }
+        }
+
+        updateHotBoard();
+        EOF
+        
+        node update-hot-board.js 

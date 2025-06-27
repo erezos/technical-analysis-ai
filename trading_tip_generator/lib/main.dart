@@ -1,26 +1,56 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'disclaimer_page.dart';
 import 'providers/trading_tips_provider.dart';
 import 'screens/trading_tip_screen.dart';
 import 'screens/hot_board_screen_enhanced.dart';
 import 'screens/lesson_screen.dart';
+import 'models/trading_tip.dart';
 import 'services/notification_service.dart';
 import 'services/stats_service.dart';
 import 'services/trading_link_service.dart';
-import 'services/notification_permission_service.dart';
+import 'services/notification_permission_service_fixed.dart';
 import 'services/educational_service.dart';
 import 'widgets/premium_glassmorphism_nav.dart';
 import 'widgets/responsive/responsive_layout.dart';
 import 'widgets/education_category_button.dart';
+import 'widgets/enhanced_micro_animations.dart';
+import 'widgets/premium_fintech_buttons.dart';
+import 'widgets/premium_trading_icons.dart';
+import 'widgets/premium_typography.dart';
+import 'utils/trading_background_utils.dart';
+// CRITICAL: Background message handler for iOS and Android notifications
+@pragma('vm:entry-point')
+Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
+  // Initialize Firebase for background context
+  await Firebase.initializeApp();
+  
+  print('🔔 Background message received: ${message.messageId}');
+  print('📱 Message data: ${message.data}');
+  print('📢 Notification: ${message.notification?.title} - ${message.notification?.body}');
+  
+  // Handle the background message based on type
+  if (message.data['type'] == 'trading_tip') {
+    print('📈 Trading tip received in background: ${message.data['symbol']}');
+    print('⏰ Timeframe: ${message.data['timeframe']}');
+    print('🎯 Target timeframe: ${message.data['target_timeframe']}');
+  } else if (message.data['type'] == 'crypto_tip') {
+    print('₿ Crypto tip received in background: ${message.data['symbol']}');
+  }
+  
+  // Optional: Show local notification for background messages
+  // This ensures notifications are displayed even in background/terminated state
+}
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp();
   
-  // Initialize notifications
-  await NotificationService.initialize();
+  // CRITICAL: Register background message handler BEFORE any other Firebase operations
+  FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
   
   // Initialize app statistics
   await StatsService.initializeStatsForSession();
@@ -31,11 +61,25 @@ void main() async {
   // Initialize educational content (NEW)
   await EducationalService.initializeEducationalContent();
   
+  // Enable edge-to-edge display - best practice for Android full screen
+  SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+  
+  // Set transparent system bars for edge-to-edge experience
+  SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
+    statusBarColor: Colors.transparent,
+    statusBarIconBrightness: Brightness.light,
+    systemNavigationBarColor: Colors.transparent,
+    systemNavigationBarIconBrightness: Brightness.light,
+  ));
+  
   runApp(const MyApp());
 }
 
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
+
+  // Global navigator key for notification handling
+  static final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
   @override
   Widget build(BuildContext context) {
@@ -44,8 +88,45 @@ class MyApp extends StatelessWidget {
       child: MaterialApp(
         title: 'Trading Tip Generator',
         theme: _buildTheme(),
+        navigatorKey: navigatorKey,
         home: const HomeScreen(),
         debugShowCheckedModeBanner: false,
+        // Add routes for notification navigation
+        routes: {
+          '/hot_board': (context) => const HotBoardScreenEnhanced(),
+        },
+        onGenerateRoute: (settings) {
+          // Handle trading tip route with arguments
+          if (settings.name == '/trading_tip') {
+            final args = settings.arguments as Map<String, dynamic>?;
+            
+            // If we have notification data, navigate to the specific timeframe screen
+            if (args != null) {
+              final symbol = args['symbol'] ?? 'Unknown';
+              final timeframe = args['target_timeframe'] ?? args['timeframe'] ?? 'short_term';
+              
+              print('🧭 Route handling: Navigating to $symbol ($timeframe)');
+              
+              // Instead of creating a placeholder tip, navigate to HomeScreen and then fetch the specific timeframe tip
+              return MaterialPageRoute(
+                builder: (context) => _NotificationTipNavigator(
+                  symbol: symbol,
+                  timeframe: timeframe,
+                ),
+                settings: settings,
+              );
+            }
+          }
+          return null;
+        },
+        // Initialize notifications after MaterialApp is ready
+        builder: (context, child) {
+          // Initialize notifications with navigator key
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            NotificationService.initialize(navigatorKey: navigatorKey);
+          });
+          return child!;
+        },
       ),
     );
   }
@@ -58,9 +139,7 @@ class MyApp extends StatelessWidget {
         primary: Color(0xFF00D4AA),
         secondary: Color(0xFF4ECDC4),
         surface: Color(0xFF1A1A1A),
-        background: Color(0xFF121212),
         onSurface: Color(0xFFE1E1E1),
-        onBackground: Color(0xFFE1E1E1),
       ),
       cardTheme: CardThemeData(
         elevation: 8,
@@ -69,6 +148,7 @@ class MyApp extends StatelessWidget {
       ),
       appBarTheme: const AppBarTheme(
         backgroundColor: Color(0xFF1A1A1A),
+        foregroundColor: Color(0xFFE1E1E1), // Text/icon color
         elevation: 0,
         centerTitle: true,
       ),
@@ -156,6 +236,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     return Scaffold(
       backgroundColor: Colors.black, // Ensure dark background
       extendBody: true, // Allow navigation bar to overlap body for glassmorphism
+      extendBodyBehindAppBar: true, // Extend content behind status bar for full edge-to-edge
       body: _buildCurrentScreen(screenSize, isSmallMobile, isTablet),
       bottomNavigationBar: PremiumGlassmorphismNav(
         currentIndex: _currentIndex,
@@ -191,9 +272,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
             colors: [
-              Colors.black.withOpacity(0.85),
-              Colors.black.withOpacity(0.9),
-              Colors.black.withOpacity(0.95),
+              Colors.black.withOpacity( 0.85),
+              Colors.black.withOpacity( 0.9),
+              Colors.black.withOpacity( 0.95),
             ],
           ),
         ),
@@ -294,7 +375,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         ),
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: const Color(0xFF00D4AA).withOpacity(0.2),
+          color: const Color(0xFF00D4AA).withOpacity( 0.2),
           width: 1,
         ),
       ),
@@ -308,7 +389,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                 Container(
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF00D4AA).withOpacity(0.2),
+                    color: const Color(0xFF00D4AA).withOpacity( 0.2),
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: const Icon(
@@ -346,10 +427,10 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: const Color(0xFF00D4AA).withOpacity(0.1),
+                color: const Color(0xFF00D4AA).withOpacity( 0.1),
                 borderRadius: BorderRadius.circular(8),
                 border: Border.all(
-                  color: const Color(0xFF00D4AA).withOpacity(0.3),
+                  color: Colors.white.withOpacity( 0.3),
                   width: 1,
                 ),
               ),
@@ -404,7 +485,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         ),
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
-          color: Colors.white.withOpacity(0.1),
+          color: Colors.white.withOpacity( 0.1),
           width: 1,
         ),
       ),
@@ -592,227 +673,217 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   }
 
   Widget _buildFixedLayout(double buttonHeight, bool isSmallMobile, bool isTablet, double availableHeight) {
+    // Screen-relative spacing based on best practices
+    final screenHeight = MediaQuery.sizeOf(context).height;
+    final baseSpacing = screenHeight * 0.01; // 1% of screen height as base unit
+    
     return Column(
+      mainAxisSize: MainAxisSize.min,
       children: [
         _buildHeader(),
-        SizedBox(height: isSmallMobile ? 8 : (availableHeight * 0.02)),
+        SizedBox(height: baseSpacing * 2.5), // 2.5% of screen height
         _buildStatsCard(),
-        SizedBox(height: isSmallMobile ? 6 : (availableHeight * 0.015)),
-        Expanded(
+        SizedBox(height: baseSpacing * 2), // 2% of screen height
+        Flexible(
+          flex: 1,
           child: _buildTimeframeButtons(buttonHeight),
         ),
-        SizedBox(height: isSmallMobile ? 4 : (availableHeight * 0.01)),
+        SizedBox(height: baseSpacing * 1.5), // 1.5% of screen height
         _buildFooter(),
       ],
     );
   }
 
   Widget _buildScrollableLayout(double buttonHeight, bool isSmallMobile, bool isTablet) {
+    final screenHeight = MediaQuery.sizeOf(context).height;
+    final baseSpacing = screenHeight * 0.01; // 1% of screen height as base unit
+    
     return SingleChildScrollView(
       physics: const BouncingScrollPhysics(),
       child: Column(
         children: [
           _buildHeader(),
-          SizedBox(height: isSmallMobile ? 8 : 24),
+          SizedBox(height: baseSpacing * 3), // 3% of screen height
           _buildStatsCard(),
-          SizedBox(height: isSmallMobile ? 6 : 20),
+          SizedBox(height: baseSpacing * 2.5), // 2.5% of screen height
           _buildTimeframeButtons(buttonHeight),
-          SizedBox(height: isSmallMobile ? 6 : 20),
+          SizedBox(height: baseSpacing * 2.5), // 2.5% of screen height
           _buildFooter(),
-          SizedBox(height: isSmallMobile ? 20 : 30), // Extra bottom padding
+          SizedBox(height: baseSpacing * 4), // 4% of screen height bottom padding
         ],
       ),
     );
   }
 
   Widget _buildHeader() {
-    final screenSize = MediaQuery.of(context).size;
-    final isSmallMobile = screenSize.width <= 375 && screenSize.height <= 812;
-    // Improved tablet detection - iPad Air 11-inch is 1180x820
-    final isTablet = screenSize.width > 600 || screenSize.height > 900;
+    final screenSize = MediaQuery.sizeOf(context);
+    final screenWidth = screenSize.width;
+    final screenHeight = screenSize.height;
+    
+    // Responsive breakpoints based on industry standards
+    final isCompact = screenWidth < 600; // Phone
+    final isMedium = screenWidth >= 600 && screenWidth < 900; // Tablet
+    final isExpanded = screenWidth >= 900; // Desktop
+    
+    // BIGGER icon sizing (12% of screen height instead of 10%)
+    final iconSize = (screenHeight * 0.12).clamp(90.0, 140.0);
+    
+    // Smaller spacing for tighter layout (1.5-2% of screen height)
+    final spacing = (screenHeight * 0.015).clamp(12.0, 24.0);
     
     return Column(
       children: [
-        Container(
-          padding: EdgeInsets.all(isSmallMobile ? 12 : (isTablet ? 20 : 16)),
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            gradient: LinearGradient(
-              colors: [
-                Theme.of(context).colorScheme.primary,
-                Theme.of(context).colorScheme.secondary,
-              ],
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: Theme.of(context).colorScheme.primary.withOpacity(0.3),
-                blurRadius: isSmallMobile ? 16 : (isTablet ? 24 : 20),
-                spreadRadius: isSmallMobile ? 1 : (isTablet ? 3 : 2),
-              ),
-            ],
-          ),
-          child: Icon(
-            Icons.analytics,
-            size: isSmallMobile ? 36 : (isTablet ? 56 : 48),
-            color: Colors.white,
-          ),
+        PremiumTradingIcons.premiumLogo(
+          size: iconSize,
+          animated: true,
         ),
-        SizedBox(height: isSmallMobile ? 12 : (isTablet ? 32 : 24)),
-        Text(
-          'AI Technical Analysis',
-          textAlign: TextAlign.center,
-          style: TextStyle(
-            fontSize: isSmallMobile ? 22 : (isTablet ? 40 : 32),
-            fontWeight: FontWeight.bold,
-            letterSpacing: -0.5,
-          ),
+        SizedBox(height: spacing),
+        PremiumTypography.responsiveTitle(
+          text: 'AI Technical Analysis',
+          context: context,
+          animated: true,
         ),
       ],
     );
   }
 
   Widget _buildStatsCard() {
-    // Get session-based cached stats (no real-time streaming)
-    final stats = StatsService.getSessionStats();
-    final screenSize = MediaQuery.of(context).size;
-    final isSmallMobile = screenSize.width <= 375 && screenSize.height <= 812;
+    final screenSize = MediaQuery.sizeOf(context);
+    final screenWidth = screenSize.width;
+    final screenHeight = screenSize.height;
+    
+    // Responsive breakpoints
+    final isCompact = screenWidth < 600; // Phone
+    final isMedium = screenWidth >= 600 && screenWidth < 900; // Tablet
+    final isExpanded = screenWidth >= 900; // Desktop
+    
+    // Better padding for smaller height (3-4% of screen width)
+    final horizontalPadding = (screenWidth * 0.035).clamp(20.0, 40.0);
+    final verticalPadding = (screenHeight * 0.015).clamp(10.0, 20.0); // SMALLER vertical padding for lower height
+    final borderRadius = (screenWidth * 0.03).clamp(16.0, 24.0);
+    
+    // Smaller divider height
+    final dividerHeight = (screenHeight * 0.025).clamp(16.0, 28.0); // SMALLER divider
     
     return Container(
-          padding: EdgeInsets.all(isSmallMobile ? 12 : 20),
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              colors: [
-                const Color(0xFF1E1E1E).withOpacity(0.8),
-                const Color(0xFF2A2A2A).withOpacity(0.6),
-              ],
-            ),
-            borderRadius: BorderRadius.circular(isSmallMobile ? 16 : 20),
-            border: Border.all(
-              color: Theme.of(context).colorScheme.primary.withOpacity(0.2),
-              width: 1,
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.3),
-                blurRadius: isSmallMobile ? 12 : 16,
-                offset: Offset(0, isSmallMobile ? 6 : 8),
-              ),
-            ],
+      margin: EdgeInsets.symmetric(
+        horizontal: (screenWidth * 0.04).clamp(16.0, 32.0),
+      ),
+      padding: EdgeInsets.symmetric(
+        horizontal: horizontalPadding,
+        vertical: verticalPadding,
+      ),
+      decoration: BoxDecoration(
+        color: Colors.grey[900]?.withOpacity(0.8),
+        borderRadius: BorderRadius.circular(borderRadius),
+        border: Border.all(
+          color: Colors.grey[700]!.withOpacity(0.3),
+          width: 1,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.3),
+            blurRadius: 15,
+            offset: const Offset(0, 4),
           ),
-          child: isSmallMobile 
-            ? Row(
-                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  Expanded(child: _buildStatItem(
-                    'Tips',
-                    StatsService.formatGeneratedTips(stats['generatedTips'] ?? 47),
-                    Icons.trending_up,
-                    Theme.of(context).colorScheme.primary,
-                    isSmallMobile,
-                  )),
-                  Expanded(child: _buildStatItem(
-                    'Success',
-                    StatsService.formatSuccessRate((stats['successRate'] ?? 96.2).toDouble()),
-                    Icons.verified,
-                    Colors.green,
-                    isSmallMobile,
-                  )),
-                  Expanded(child: _buildStatItem(
-                    'Accuracy',
-                    StatsService.formatAiAccuracy((stats['aiAccuracy'] ?? 98.7).toDouble()),
-                    Icons.psychology,
-                    Colors.blue,
-                    isSmallMobile,
-                  )),
-                ],
-              )
-            : Row(
-                mainAxisAlignment: MainAxisAlignment.spaceAround,
-                children: [
-                  _buildStatItem(
-                    'Generated Tips',
-                    StatsService.formatGeneratedTips(stats['generatedTips'] ?? 47),
-                    Icons.trending_up,
-                    Theme.of(context).colorScheme.primary,
-                    isSmallMobile,
-                  ),
-                  Container(
-                    width: 1,
-                    height: 40,
-                    color: Colors.grey[700],
-                  ),
-                  _buildStatItem(
-                    'Success Rate',
-                    StatsService.formatSuccessRate((stats['successRate'] ?? 96.2).toDouble()),
-                    Icons.verified,
-                    Colors.green,
-                    isSmallMobile,
-                  ),
-                  Container(
-                    width: 1,
-                    height: 40,
-                    color: Colors.grey[700],
-                  ),
-                  _buildStatItem(
-                    'AI Accuracy',
-                    StatsService.formatAiAccuracy((stats['aiAccuracy'] ?? 98.7).toDouble()),
-                    Icons.psychology,
-                    Colors.blue,
-                    isSmallMobile,
-                  ),
-                ],
-              ),
-        );
+        ],
+      ),
+      child: IntrinsicHeight(
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+          children: [
+            Expanded(
+              child: _buildStatItem('Tips', '23', Icons.trending_up, const Color(0xFF00D4AA), isCompact),
+            ),
+            Container(
+              width: 1,
+              height: dividerHeight,
+              color: Colors.grey[600]?.withOpacity(0.5),
+            ),
+            Expanded(
+              child: _buildStatItem('Success', '98%', Icons.check_circle, const Color(0xFF4CAF50), isCompact),
+            ),
+            Container(
+              width: 1,
+              height: dividerHeight,
+              color: Colors.grey[600]?.withOpacity(0.5),
+            ),
+            Expanded(
+              child: _buildStatItem('Accuracy', '97%', Icons.track_changes, const Color(0xFF2196F3), isCompact),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
-  Widget _buildStatItem(String label, String value, IconData icon, Color color, [bool isSmallMobile = false]) {
-    final screenSize = MediaQuery.of(context).size;
-    // Improved tablet detection - iPad Air 11-inch is 1180x820
-    final isTablet = screenSize.width > 600 || screenSize.height > 900;
+  Widget _buildStatItem(String label, String value, IconData icon, Color color, [bool isCompact = false]) {
+    final screenSize = MediaQuery.sizeOf(context);
+    final screenWidth = screenSize.width;
+    final screenHeight = screenSize.height;
+    
+    // Responsive breakpoints
+    final isMedium = screenWidth >= 600 && screenWidth < 900; // Tablet
+    final isExpanded = screenWidth >= 900; // Desktop
+    
+    // Good icon sizing (6-7% of screen width)
+    final iconSize = (screenWidth * 0.065).clamp(36.0, 54.0);
+    final iconPadding = (iconSize * 0.25).clamp(7.0, 13.0);
+    final borderRadius = (iconSize * 0.25).clamp(9.0, 13.0);
+    
+    // Good text sizing
+    final valueTextSize = isCompact 
+        ? (screenWidth * 0.045).clamp(18.0, 26.0)
+        : (screenWidth * 0.038).clamp(22.0, 30.0);
+    final labelTextSize = isCompact 
+        ? (screenWidth * 0.028).clamp(11.0, 15.0)
+        : (screenWidth * 0.024).clamp(13.0, 17.0);
+    
+    // SMALLER vertical spacing for more compact stats
+    final verticalSpacing = (screenHeight * 0.005).clamp(4.0, 8.0);
     
     return Column(
       mainAxisAlignment: MainAxisAlignment.center,
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
         Container(
-          width: isSmallMobile ? 28 : (isTablet ? 44 : 36),
-          height: isSmallMobile ? 28 : (isTablet ? 44 : 36),
-          padding: EdgeInsets.all(isSmallMobile ? 4 : (isTablet ? 8 : 6)),
+          width: iconSize,
+          height: iconSize,
+          padding: EdgeInsets.all(iconPadding),
           decoration: BoxDecoration(
-            color: color.withOpacity(0.1),
-            borderRadius: BorderRadius.circular(isSmallMobile ? 6 : (isTablet ? 10 : 8)),
+            color: color.withOpacity( 0.15),
+            borderRadius: BorderRadius.circular(borderRadius),
           ),
           child: Center(
             child: Icon(
               icon, 
               color: color, 
-              size: isSmallMobile ? 16 : (isTablet ? 24 : 20),
+              size: iconSize * 0.55,
             ),
           ),
         ),
-        SizedBox(height: isSmallMobile ? 4 : (isTablet ? 8 : 6)),
+        SizedBox(height: verticalSpacing),
         FittedBox(
           fit: BoxFit.scaleDown,
           child: Text(
             value,
             style: TextStyle(
-              fontSize: isSmallMobile ? 12 : (isTablet ? 22 : 18),
+              fontSize: valueTextSize,
               fontWeight: FontWeight.bold,
               color: color,
             ),
             textAlign: TextAlign.center,
           ),
         ),
-        SizedBox(height: isSmallMobile ? 1 : (isTablet ? 4 : 3)),
+        SizedBox(height: verticalSpacing * 0.5),
         FittedBox(
           fit: BoxFit.scaleDown,
           child: Text(
             label,
             style: TextStyle(
-              fontSize: isSmallMobile ? 8 : (isTablet ? 14 : 12),
+              fontSize: labelTextSize,
               color: Colors.grey[400],
-              fontWeight: FontWeight.w500,
+              fontWeight: FontWeight.w600,
             ),
             textAlign: TextAlign.center,
             maxLines: 2,
@@ -831,56 +902,133 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     
     return Consumer<TradingTipsProvider>(
       builder: (context, provider, child) {
-        return Column(
-          children: [
-            Expanded(
-              child: _buildTimeframeButton(
-                context,
-                'Short Term',
-                'Quick scalping opportunities',
-                Icons.flash_on,
-                const LinearGradient(
-                  colors: [Color(0xFFFF6B6B), Color(0xFFFF8E53)],
-                ),
-                () => _navigateToTip(context, provider, 'short_term'),
-                provider.isLoading,
-              ),
-            ),
-            SizedBox(height: isSmallMobile ? 4 : (isTablet ? 16 : 10)),
-            Expanded(
-              child: _buildTimeframeButton(
-                context,
-                'Mid Term',
-                'Swing trading positions',
-                Icons.trending_up,
-                const LinearGradient(
-                  colors: [Color(0xFF4ECDC4), Color(0xFF44A08D)],
-                ),
-                () => _navigateToTip(context, provider, 'mid_term'),
-                provider.isLoading,
-              ),
-            ),
-            SizedBox(height: isSmallMobile ? 4 : (isTablet ? 16 : 10)),
-            Expanded(
-              child: _buildTimeframeButton(
-                context,
-                'Long Term',
-                'Investment opportunities',
-                Icons.timeline,
-                const LinearGradient(
-                  colors: [Color(0xFF667eea), Color(0xFF764ba2)],
-                ),
-                () => _navigateToTip(context, provider, 'long_term'),
-                provider.isLoading,
-              ),
-            ),
-            SizedBox(height: isSmallMobile ? 6 : (isTablet ? 20 : 14)),
-            Expanded(
-              child: _buildTradingActionButton(),
-            ),
-          ],
+        return LayoutBuilder(
+          builder: (context, constraints) {
+            // Calculate available space and adjust accordingly
+            final availableHeight = constraints.maxHeight;
+            final minButtonHeight = isSmallMobile ? 40.0 : 48.0;
+            final spacing = (screenHeight * 0.015).clamp(8.0, 20.0); // 1.5% of screen height
+            
+            // Calculate if we have enough space for all buttons
+            final totalSpacing = spacing * 3; // 3 spaces between 4 buttons
+            final totalMinHeight = (minButtonHeight * 4) + totalSpacing;
+            
+            // Use IntrinsicHeight to prevent overflow
+            return totalMinHeight > availableHeight
+              ? _buildCompactTimeframeButtons(provider, isSmallMobile, isTablet)
+              : _buildStandardTimeframeButtons(provider, isSmallMobile, isTablet, spacing);
+          },
         );
       },
+    );
+  }
+
+  Widget _buildStandardTimeframeButtons(TradingTipsProvider provider, bool isSmallMobile, bool isTablet, double spacing) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Flexible(
+          flex: 1,
+          child: _buildTimeframeButton(
+            context,
+            'Short Term',
+            'Quick scalping opportunities',
+            Icons.flash_on,
+            const LinearGradient(
+              colors: [Color(0xFFFF6B6B), Color(0xFFFF8E53)],
+            ),
+            () => _navigateToTip(context, provider, 'short_term'),
+            provider.isLoading,
+          ),
+        ),
+        SizedBox(height: spacing),
+        Flexible(
+          flex: 1,
+          child: _buildTimeframeButton(
+            context,
+            'Mid Term',
+            'Swing trading positions',
+            Icons.trending_up,
+            const LinearGradient(
+              colors: [Color(0xFF4ECDC4), Color(0xFF44A08D)],
+            ),
+            () => _navigateToTip(context, provider, 'mid_term'),
+            provider.isLoading,
+          ),
+        ),
+        SizedBox(height: spacing),
+        Flexible(
+          flex: 1,
+          child: _buildTimeframeButton(
+            context,
+            'Long Term',
+            'Investment opportunities',
+            Icons.timeline,
+            const LinearGradient(
+              colors: [Color(0xFF667eea), Color(0xFF764ba2)],
+            ),
+            () => _navigateToTip(context, provider, 'long_term'),
+            provider.isLoading,
+          ),
+        ),
+        SizedBox(height: spacing),
+        Flexible(
+          flex: 1,
+          child: _buildTradingActionButton(),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildCompactTimeframeButtons(TradingTipsProvider provider, bool isSmallMobile, bool isTablet) {
+    final screenHeight = MediaQuery.sizeOf(context).height;
+    final spacing = (screenHeight * 0.01).clamp(6.0, 12.0); // 1% of screen height for compact spacing
+    
+    return SingleChildScrollView(
+      physics: const BouncingScrollPhysics(),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _buildTimeframeButton(
+            context,
+            'Short Term',
+            'Quick scalping opportunities',
+            Icons.flash_on,
+            const LinearGradient(
+              colors: [Color(0xFFFF6B6B), Color(0xFFFF8E53)],
+            ),
+            () => _navigateToTip(context, provider, 'short_term'),
+            provider.isLoading,
+          ),
+          SizedBox(height: spacing),
+          _buildTimeframeButton(
+            context,
+            'Mid Term',
+            'Swing trading positions',
+            Icons.trending_up,
+            const LinearGradient(
+              colors: [Color(0xFF4ECDC4), Color(0xFF44A08D)],
+            ),
+            () => _navigateToTip(context, provider, 'mid_term'),
+            provider.isLoading,
+          ),
+          SizedBox(height: spacing),
+          _buildTimeframeButton(
+            context,
+            'Long Term',
+            'Investment opportunities',
+            Icons.timeline,
+            const LinearGradient(
+              colors: [Color(0xFF667eea), Color(0xFF764ba2)],
+            ),
+            () => _navigateToTip(context, provider, 'long_term'),
+            provider.isLoading,
+          ),
+          SizedBox(height: spacing),
+          _buildTradingActionButton(),
+          SizedBox(height: isSmallMobile ? 8.0 : 12.0), // Extra bottom padding
+        ],
+      ),
     );
   }
 
@@ -899,265 +1047,152 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     final isTablet = screenWidth > 600 || screenHeight > 900;
     final isSmallMobile = screenWidth <= 375 && screenHeight <= 812;
     
-    return AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        width: double.infinity,
-        child: Material(
-          color: Colors.transparent,
-          borderRadius: BorderRadius.circular(16),
-          child: InkWell(
-            borderRadius: BorderRadius.circular(16),
-            onTap: isLoading ? null : onTap,
-            child: Container(
-              padding: EdgeInsets.symmetric(
-                horizontal: isSmallMobile ? 12 : (isTablet ? 24 : 16),
-                vertical: isSmallMobile ? 1 : (isTablet ? 12 : 6),
-              ),
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: gradient.colors.map((c) => c.withOpacity(0.1)).toList(),
-                ),
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(
-                  color: gradient.colors.first.withOpacity(0.3),
-                  width: 1,
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: gradient.colors.first.withOpacity(0.2),
-                    blurRadius: 8,
-                    offset: const Offset(0, 4),
-                  ),
-                ],
-              ),
-              child: Row(
-                children: [
-                  Container(
-                    padding: EdgeInsets.all(isSmallMobile ? 4 : (isTablet ? 12 : 8)),
-                    decoration: BoxDecoration(
-                      gradient: gradient,
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Icon(icon, color: Colors.white, size: isSmallMobile ? 16 : (isTablet ? 24 : 18)),
-                  ),
-                  SizedBox(width: isTablet ? 16 : 10),
-                  Expanded(
-                    child: isSmallMobile 
-                      ? Text(
-                          title,
-                          style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        )
-                      : Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text(
-                              title,
-                              style: TextStyle(
-                                fontSize: isTablet ? 20 : 14,
-                                fontWeight: FontWeight.bold,
-                                height: 1.0,
-                              ),
-                            ),
-                            const SizedBox(height: 1),
-                            Text(
-                              description,
-                              style: TextStyle(
-                                fontSize: isTablet ? 14 : 10,
-                                color: Colors.grey[400],
-                                height: 1.0,
-                              ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ],
-                        ),
-                  ),
-                  if (isLoading)
-                    SizedBox(
-                      width: isTablet ? 22 : 16,
-                      height: isTablet ? 22 : 16,
-                      child: const CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  else
-                    Icon(
-                      Icons.arrow_forward_ios,
-                      color: gradient.colors.first,
-                      size: isTablet ? 16 : 12,
-                    ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      );
-  }
-
-  Widget _buildTradingActionButton() {
     return LayoutBuilder(
       builder: (context, constraints) {
-        // Get actual available space from constraints
+        // Determine layout based on available space
         final availableHeight = constraints.maxHeight;
-        final availableWidth = constraints.maxWidth;
+        final minHeight = isSmallMobile ? 40.0 : 48.0;
+        final hasEnoughHeightForDescription = availableHeight >= 60 && !isSmallMobile;
         
-        // Define responsive breakpoints based on Flutter best practices
-        final isCompact = availableWidth < 600;
-        final isMedium = availableWidth >= 600 && availableWidth < 840;
-        final isExpanded = availableWidth >= 840;
-        
-        // Calculate responsive sizes based on available space
-        final horizontalPadding = isCompact ? 16.0 : (isMedium ? 20.0 : 24.0);
-        final iconSize = isCompact ? 18.0 : (isMedium ? 20.0 : 24.0);
-        final titleFontSize = isCompact ? 16.0 : (isMedium ? 18.0 : 20.0);
-        final subtitleFontSize = isCompact ? 11.0 : (isMedium ? 12.0 : 14.0);
-        
-        // Determine if we have enough height for two-line layout
-        final hasEnoughHeight = availableHeight >= 60;
-        final shouldShowSubtitle = hasEnoughHeight && !isCompact;
-        
-        // Calculate padding based on available height
-        final verticalPadding = hasEnoughHeight ? 
-          (isCompact ? 8.0 : (isMedium ? 12.0 : 16.0)) : 
-          6.0;
-        
-        return Container(
-          width: double.infinity,
-          constraints: BoxConstraints(
-            minHeight: 44.0, // Minimum touch target
-            maxHeight: availableHeight,
-          ),
-          child: Material(
-            color: Colors.transparent,
-            borderRadius: BorderRadius.circular(16),
-            child: InkWell(
+        return AnimatedTradingCard(
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 200),
+            width: double.infinity,
+            constraints: BoxConstraints(
+              minHeight: minHeight,
+              maxHeight: availableHeight,
+            ),
+            child: Material(
+              color: Colors.transparent,
               borderRadius: BorderRadius.circular(16),
-              onTap: () {
-                _openTradingPlatform();
-              },
-              child: Container(
-                padding: EdgeInsets.symmetric(
-                  horizontal: horizontalPadding,
-                  vertical: verticalPadding,
-                ),
-                decoration: BoxDecoration(
-                  gradient: const LinearGradient(
-                    colors: [
-                      Color(0xFFFFD700),
-                      Color(0xFFFF8C00),
-                      Color(0xFFFF6347),
+              child: InkWell(
+                borderRadius: BorderRadius.circular(16),
+                onTap: isLoading ? null : onTap,
+                child: Container(
+                  padding: EdgeInsets.symmetric(
+                    horizontal: isSmallMobile ? 12 : (isTablet ? 24 : 16),
+                    vertical: isSmallMobile ? 8 : (isTablet ? 12 : 10),
+                  ),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: gradient.colors.map((c) => c.withOpacity(0.1)).toList(),
+                    ),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(
+                      color: gradient.colors.first.withOpacity(0.3),
+                      width: 1,
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: gradient.colors.first.withOpacity(0.2),
+                        blurRadius: 8,
+                        offset: const Offset(0, 4),
+                      ),
                     ],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
                   ),
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(
-                    color: const Color(0xFFFFD700).withOpacity(0.5),
-                    width: 2,
-                  ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: const Color(0xFFFFD700).withOpacity(0.4),
-                      blurRadius: 16,
-                      offset: const Offset(0, 6),
-                    ),
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.3),
-                      blurRadius: 12,
-                      offset: const Offset(0, 4),
-                    ),
-                  ],
-                ),
-                child: Row(
-                  children: [
-                    // Icon container
-                    Container(
-                      padding: EdgeInsets.all(isCompact ? 6.0 : 8.0),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.2),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Icon(
-                        Icons.rocket_launch,
-                        color: Colors.white,
-                        size: iconSize,
-                      ),
-                    ),
-                    SizedBox(width: isCompact ? 8.0 : 12.0),
-                    
-                    // Text content - use Flexible to prevent overflow
-                    Flexible(
-                      child: shouldShowSubtitle ? 
-                        // Two-line layout when there's enough space
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text(
-                              'Start Trading',
-                              style: TextStyle(
-                                fontSize: titleFontSize,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.white,
-                                height: 1.2,
-                              ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            const SizedBox(height: 2),
-                            Text(
-                              'Turn insights into profits',
-                              style: TextStyle(
-                                fontSize: subtitleFontSize,
-                                color: Colors.white.withOpacity(0.9),
-                                fontWeight: FontWeight.w500,
-                                height: 1.2,
-                              ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ],
-                        ) :
-                        // Single-line layout for compact spaces
-                        Text(
-                          'Start Trading',
-                          style: TextStyle(
-                            fontSize: titleFontSize,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.white,
-                            height: 1.2,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: EdgeInsets.all(isSmallMobile ? 4 : (isTablet ? 12 : 8)),
+                        decoration: BoxDecoration(
+                          gradient: gradient,
+                          borderRadius: BorderRadius.circular(8),
                         ),
-                    ),
-                    
-                    SizedBox(width: isCompact ? 8.0 : 12.0),
-                    
-                    // Arrow icon
-                    Container(
-                      padding: EdgeInsets.all(isCompact ? 4.0 : 6.0),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.2),
-                        borderRadius: BorderRadius.circular(6),
+                        child: Icon(icon, color: Colors.white, size: isSmallMobile ? 16 : (isTablet ? 24 : 18)),
                       ),
-                      child: Icon(
-                        Icons.arrow_forward,
-                        color: Colors.white,
-                        size: isCompact ? 14.0 : 16.0,
+                      SizedBox(width: isTablet ? 16 : 10),
+                      Expanded(
+                        child: LayoutBuilder(
+                          builder: (context, constraints) {
+                            // Calculate if we truly have enough space for multi-line content
+                            final reallyHasSpace = constraints.maxHeight >= 50 && hasEnoughHeightForDescription;
+                            
+                            return reallyHasSpace
+                              ? Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Flexible(
+                                      child: Text(
+                                        title,
+                                        style: TextStyle(
+                                          fontSize: isTablet ? 20 : 14,
+                                          fontWeight: FontWeight.bold,
+                                          height: 1.2,
+                                        ),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                    if (constraints.maxHeight >= 52) ...[
+                                      const SizedBox(height: 2),
+                                      Flexible(
+                                        child: Text(
+                                          description,
+                                          style: TextStyle(
+                                            fontSize: isTablet ? 14 : 10,
+                                            color: Colors.grey[400],
+                                            height: 1.2,
+                                          ),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ),
+                                    ],
+                                  ],
+                                )
+                              : Center(
+                                  child: Text(
+                                    title,
+                                    style: TextStyle(
+                                      fontSize: isSmallMobile ? 14 : (isTablet ? 18 : 16),
+                                      fontWeight: FontWeight.bold,
+                                      height: 1.2,
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                );
+                          },
+                        ),
                       ),
-                    ),
-                  ],
+                      SizedBox(width: isTablet ? 16 : 10),
+                      if (isLoading)
+                        SizedBox(
+                          width: isTablet ? 22 : 16,
+                          height: isTablet ? 22 : 16,
+                          child: const CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      else
+                        Icon(
+                          Icons.arrow_forward_ios,
+                          color: gradient.colors.first,
+                          size: isTablet ? 16 : 12,
+                        ),
+                    ],
+                  ),
                 ),
               ),
             ),
           ),
         );
       },
+    );
+  }
+
+  Widget _buildTradingActionButton() {
+    return Container(
+      width: double.infinity,
+      child: PremiumFintechButtons.primaryAction(
+        text: 'Start Trading',
+        subtitle: 'Turn insights into profits',
+        icon: Icons.rocket_launch,
+        context: context,
+        onPressed: () async {
+          _openTradingPlatform();
+        },
+      ),
     );
   }
 
@@ -1257,5 +1292,136 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         ),
       );
     }
+  }
+}
+
+/// Widget to handle notification-based navigation to specific timeframe tips
+class _NotificationTipNavigator extends StatefulWidget {
+  final String symbol;
+  final String timeframe;
+
+  const _NotificationTipNavigator({
+    required this.symbol,
+    required this.timeframe,
+  });
+
+  @override
+  State<_NotificationTipNavigator> createState() => _NotificationTipNavigatorState();
+}
+
+class _NotificationTipNavigatorState extends State<_NotificationTipNavigator> {
+  @override
+  void initState() {
+    super.initState();
+    // Navigate to the specific timeframe tip after the widget builds
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _navigateToSpecificTip();
+    });
+  }
+
+  Future<void> _navigateToSpecificTip() async {
+    try {
+      // Get the trading tips provider
+      final provider = context.read<TradingTipsProvider>();
+      
+      // Load latest tips if not already loaded
+      await provider.loadLatestTips();
+      
+      // Get the tip for the specific timeframe
+      final tip = await provider.getTipForTimeframe(widget.timeframe);
+      
+      if (tip != null && mounted) {
+        // Navigate to the tip screen
+        Navigator.of(context).pushReplacement(
+          PageRouteBuilder(
+            pageBuilder: (context, animation, secondaryAnimation) => TradingTipScreen(tip: tip),
+            transitionsBuilder: (context, animation, secondaryAnimation, child) {
+              const begin = Offset(1.0, 0.0);
+              const end = Offset.zero;
+              const curve = Curves.easeInOutCubic;
+
+              var tween = Tween(begin: begin, end: end).chain(CurveTween(curve: curve));
+              var offsetAnimation = animation.drive(tween);
+
+              return SlideTransition(position: offsetAnimation, child: child);
+            },
+            transitionDuration: const Duration(milliseconds: 400),
+          ),
+        );
+      } else {
+        // If no tip available, show message and navigate to home
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('No ${widget.timeframe.replaceAll('_', ' ')} tip available for ${widget.symbol}'),
+              backgroundColor: Colors.orange,
+              behavior: SnackBarBehavior.floating,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
+          );
+          
+          // Navigate to home screen
+          Navigator.of(context).pushReplacement(
+            MaterialPageRoute(builder: (context) => const HomeScreen()),
+          );
+        }
+      }
+    } catch (e) {
+      print('❌ Error navigating to specific tip: $e');
+      if (mounted) {
+        // Navigate to home screen on error
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(builder: (context) => const HomeScreen()),
+        );
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // Show loading screen while navigating
+    return Scaffold(
+      backgroundColor: Colors.black,
+      body: Container(
+        decoration: const BoxDecoration(
+          image: DecorationImage(
+            image: AssetImage('assets/images/background.jpg'),
+            fit: BoxFit.cover,
+          ),
+        ),
+        child: Container(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                Colors.black.withOpacity( 0.85),
+                Colors.black.withOpacity( 0.9),
+                Colors.black.withOpacity( 0.95),
+              ],
+            ),
+          ),
+          child: const Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                CircularProgressIndicator(
+                  valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF00D4AA)),
+                ),
+                SizedBox(height: 20),
+                Text(
+                  'Loading Trading Tip...',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 18,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }

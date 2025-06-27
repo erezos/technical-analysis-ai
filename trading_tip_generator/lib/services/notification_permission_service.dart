@@ -1,26 +1,28 @@
 import 'package:flutter/material.dart';
-import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'dart:math';
+import 'dart:io';
+import 'package:url_launcher/url_launcher.dart';
+import 'package:permission_handler/permission_handler.dart' as ph;
+import 'package:permission_handler/permission_handler.dart' as ph;
+import 'package:permission_handler/permission_handler.dart' as ph;
 
 class NotificationPermissionService {
-  static const double _showPromptProbability = 0.4; // 40% chance
+  static const double _showPromptProbability = 0.4; // 40% chance for returning users
   static final Random _random = Random();
   static const String _hasLaunchedBeforeKey = 'has_launched_before';
 
   /// Check if we should show the notification permission prompt
-  /// Returns true if:
-  /// 1. User hasn't approved notifications AND
-  /// 2. This is NOT the first session (to avoid double dialogs) AND
-  /// 3. Random 40% chance is hit
   static Future<bool> shouldShowPermissionPrompt() async {
     try {
-      // Check current notification permission status
-      final status = await Permission.notification.status;
+      // Use Firebase Messaging's native permission check (iOS compatible)
+      final messaging = FirebaseMessaging.instance;
+      final settings = await messaging.getNotificationSettings();
       
       // If already granted, no need to show prompt
-      if (status == PermissionStatus.granted) {
-        print('✅ Notifications already approved - no prompt needed');
+      if (settings.authorizationStatus == AuthorizationStatus.authorized) {
+        print('✅ Notifications already approved via Firebase - no prompt needed');
         return false;
       }
       
@@ -29,9 +31,8 @@ class NotificationPermissionService {
       final hasLaunchedBefore = prefs.getBool(_hasLaunchedBeforeKey) ?? false;
       
       if (!hasLaunchedBefore) {
-        // Mark that app has been launched before for future sessions
         await prefs.setBool(_hasLaunchedBeforeKey, true);
-        print('🚀 First session detected - skipping custom notification prompt to avoid double dialogs');
+        print('🚀 First session detected - skipping custom notification prompt');
         return false;
       }
       
@@ -39,7 +40,7 @@ class NotificationPermissionService {
       final randomValue = _random.nextDouble();
       final shouldShow = randomValue < _showPromptProbability;
       
-      print('🎲 Notification permission check: ${(randomValue * 100).toInt()}% (threshold: 40%) - ${shouldShow ? "SHOW" : "SKIP"} prompt');
+      print('🎲 Notification permission check: ${(randomValue * 100).toInt()}% - ${shouldShow ? "SHOW" : "SKIP"} prompt');
       
       return shouldShow;
     } catch (e) {
@@ -48,10 +49,10 @@ class NotificationPermissionService {
     }
   }
 
-  /// Show the beautiful custom notification permission dialog - iPhone 13 mini optimized
+  /// Show the beautiful custom notification permission dialog
   static Future<void> showPermissionDialog(BuildContext context) async {
     final screenSize = MediaQuery.of(context).size;
-    final isSmallScreen = screenSize.width <= 375 && screenSize.height <= 812; // iPhone 13 mini detection
+    final isSmallScreen = screenSize.width <= 375 && screenSize.height <= 812;
     
     return showDialog<void>(
       context: context,
@@ -132,7 +133,7 @@ class NotificationPermissionService {
                   
                   // Description
                   Text(
-                    'Get instant alerts when fresh AI trading signals are ready. Stay ahead of the market with timely notifications.',
+                    'Get instant alerts when fresh AI trading signals are ready.',
                     style: TextStyle(
                       fontSize: isSmallScreen ? 13 : 16,
                       color: Colors.grey[300],
@@ -143,7 +144,7 @@ class NotificationPermissionService {
                   
                   SizedBox(height: isSmallScreen ? 8 : 12),
                   
-                  // Benefits - Compact for small screens
+                  // Benefits
                   Container(
                     padding: EdgeInsets.all(isSmallScreen ? 12 : 16),
                     decoration: BoxDecoration(
@@ -166,10 +167,9 @@ class NotificationPermissionService {
                   
                   SizedBox(height: isSmallScreen ? 16 : 24),
                   
-                  // Buttons - Responsive sizing with proper text constraints
+                  // Buttons
                   Row(
                     children: [
-                      // Maybe Later button
                       Expanded(
                         child: TextButton(
                           onPressed: () => Navigator.of(context).pop(),
@@ -203,7 +203,6 @@ class NotificationPermissionService {
                       
                       SizedBox(width: isSmallScreen ? 8 : 16),
                       
-                      // Enable Notifications button
                       Expanded(
                         flex: 2,
                         child: ElevatedButton(
@@ -248,7 +247,7 @@ class NotificationPermissionService {
     );
   }
 
-  /// Helper widget for benefit rows - responsive sizing
+  /// Helper widget for benefit rows
   static Widget _buildBenefitRow(String emoji, String text, bool isSmallScreen) {
     return Row(
       children: [
@@ -271,31 +270,66 @@ class NotificationPermissionService {
     );
   }
 
-  /// Request notification permission from system
+  /// Request notification permission using Firebase messaging ONLY (iOS compatible)
   static Future<void> _requestNotificationPermission(BuildContext context) async {
     try {
-      final status = await Permission.notification.request();
+      print('🔔 Requesting notification permission via Firebase messaging...');
       
-      // Show feedback based on result
+      final messaging = FirebaseMessaging.instance;
+      
+      final settings = await messaging.requestPermission(
+        alert: true,
+        badge: true,
+        sound: true,
+        provisional: false,
+      );
+      
       String message;
       Color backgroundColor;
       
-      switch (status) {
-        case PermissionStatus.granted:
+      switch (settings.authorizationStatus) {
+        case AuthorizationStatus.authorized:
           message = '🔔 Notifications enabled! You\'ll never miss a signal.';
           backgroundColor = const Color(0xFF4CAF50);
+          print('✅ Notification permission granted');
           break;
-        case PermissionStatus.denied:
-          message = '📱 Notifications disabled. You can enable them in Settings anytime.';
+          
+        case AuthorizationStatus.provisional:
+          message = '📱 Provisional notifications enabled.';
+          backgroundColor = const Color(0xFF00D4AA);
+          print('⚡ Provisional notification permission granted');
+          break;
+          
+        case AuthorizationStatus.denied:
+          message = '📱 Notifications disabled. Enable in Settings.';
           backgroundColor = const Color(0xFFFF9800);
+          print('❌ Notification permission denied');
+          
+          // TDD FIX: Show settings button for BOTH iOS and Android
+          if (context.mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(message),
+                backgroundColor: backgroundColor,
+                behavior: SnackBarBehavior.floating,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                duration: const Duration(seconds: 6),
+                action: SnackBarAction(
+                  label: 'Open Settings',
+                  textColor: Colors.white,
+                  onPressed: () => openAppSettings(),
+                ),
+              ),
+            );
+            return;
+          }
           break;
-        case PermissionStatus.permanentlyDenied:
-          message = '⚙️ Please enable notifications in your device Settings.';
-          backgroundColor = const Color(0xFFFF9800);
-          break;
-        default:
-          message = '📱 Notification permission status updated.';
+          
+        case AuthorizationStatus.notDetermined:
+          message = '🤔 Permission not determined. Try again.';
           backgroundColor = Colors.grey;
+          print('⚠️ Notification permission not determined');
+          break;
       }
       
       if (context.mounted) {
@@ -310,7 +344,7 @@ class NotificationPermissionService {
         );
       }
       
-      print('🔔 Notification permission result: $status');
+      print('🔔 Notification permission process completed');
     } catch (e) {
       print('❌ Error requesting notification permission: $e');
       
@@ -326,4 +360,30 @@ class NotificationPermissionService {
       }
     }
   }
-} 
+
+  /// Open app settings (iOS & Android compatible)
+  static Future<void> openAppSettings() async {
+    try {
+      if (Platform.isIOS) {
+        // iOS: Use URL scheme approach
+        const url = 'app-settings:';
+        if (await canLaunchUrl(Uri.parse(url))) {
+          await launchUrl(Uri.parse(url));
+          print('📱 Opened iOS app settings');
+        } else {
+          print('❌ Could not open iOS app settings');
+        }
+      } else if (Platform.isAndroid) {
+        // Android: Use permission_handler plugin for app settings
+        final bool opened = await ph.openAppSettings();
+        if (opened) {
+          print('🤖 Opened Android app settings');
+        } else {
+          print('❌ Could not open Android app settings');
+        }
+      }
+    } catch (e) {
+      print('❌ Error opening app settings: $e');
+    }
+  }
+}

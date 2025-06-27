@@ -27,13 +27,11 @@ class NotificationService {
       // Use local company logo asset path for rich notification
       const logoAssetPath = company.logoUrl;
       
-      // Build the notification message
+      // Build the notification message with iOS-optimized settings
       const message = {
         notification: {
           title: title,
           body: body,
-          // Note: FCM doesn't support local assets in notifications
-          // We'll use a default icon and save logo display for in-app
         },
         data: {
           type: 'trading_tip',
@@ -44,7 +42,12 @@ class NotificationService {
           companyName: companyName,
           companyLogo: logoAssetPath, // Pass for in-app display
           entryPrice: entryPrice?.toString() || '',
-          timestamp: new Date().toISOString()
+          timestamp: new Date().toISOString(),
+          // Add navigation data for tap handling
+          click_action: 'FLUTTER_NOTIFICATION_CLICK',
+          route: '/trading_tip', // Route to navigate to when tapped
+          // Add timeframe-specific routing data
+          target_timeframe: timeframe // This will be used by Flutter to navigate to the specific timeframe screen
         },
         android: {
           notification: {
@@ -54,14 +57,35 @@ class NotificationService {
             priority: 'high',
             defaultSound: true,
             defaultVibrateTimings: true
+          },
+          data: {
+            click_action: 'FLUTTER_NOTIFICATION_CLICK'
           }
         },
         apns: {
+          headers: {
+            'apns-priority': '10', // High priority for immediate delivery
+            'apns-push-type': 'alert', // Required for visible notifications
+          },
           payload: {
             aps: {
+              alert: {
+                title: title,
+                body: body
+              },
               sound: 'default',
               badge: 1,
-              category: 'TRADING_TIP'
+              category: 'TRADING_TIP',
+              'content-available': 1, // Enable background processing
+              'mutable-content': 1, // Allow notification service extension
+            },
+            // Custom data for iOS
+            customData: {
+              type: 'trading_tip',
+              symbol: symbol,
+              timeframe: timeframe,
+              sentiment: sentiment,
+              target_timeframe: timeframe // For iOS-specific timeframe routing
             }
           }
         },
@@ -73,7 +97,8 @@ class NotificationService {
         title: message.notification.title,
         body: message.notification.body,
         symbol: symbol,
-        sentiment: sentiment
+        sentiment: sentiment,
+        apnsHeaders: message.apns.headers
       });
       
       // Send the notification
@@ -89,15 +114,28 @@ class NotificationService {
       
     } catch (error) {
       console.error('❌ Error sending notification:', error);
+      
+      // Log specific error details for debugging
+      if (error.code) {
+        console.error('Error code:', error.code);
+      }
+      if (error.message) {
+        console.error('Error message:', error.message);
+      }
+      if (error.details) {
+        console.error('Error details:', error.details);
+      }
+      
       return {
         success: false,
-        error: error.message
+        error: error.message,
+        errorCode: error.code
       };
     }
   }
 
   /**
-   * Send test notification
+   * Send test notification with iOS-optimized settings
    */
   async sendTestNotification() {
     try {
@@ -110,16 +148,109 @@ class NotificationService {
           type: 'test',
           timestamp: new Date().toISOString()
         },
+        android: {
+          notification: {
+            icon: 'ic_notification',
+            color: '#00D4AA',
+            channelId: 'trading_tips',
+            priority: 'high',
+            defaultSound: true,
+          }
+        },
+        apns: {
+          headers: {
+            'apns-priority': '10',
+            'apns-push-type': 'alert',
+          },
+          payload: {
+            aps: {
+              alert: {
+                title: '🧪 Trading Tip Generator Test',
+                body: 'Push notifications are working! 🎉'
+              },
+              sound: 'default',
+              badge: 1,
+              'content-available': 1,
+              'mutable-content': 1,
+            }
+          }
+        },
         topic: 'trading_tips'
       };
       
+      console.log('📤 Sending test notification with iOS optimization...');
       const response = await this.messaging.send(message);
       console.log('✅ Test notification sent:', response);
       return { success: true, messageId: response };
       
     } catch (error) {
       console.error('❌ Error sending test notification:', error);
-      return { success: false, error: error.message };
+      console.error('Error code:', error.code);
+      console.error('Error message:', error.message);
+      return { 
+        success: false, 
+        error: error.message,
+        errorCode: error.code 
+      };
+    }
+  }
+
+  /**
+   * Send notification to specific device token (for testing)
+   */
+  async sendNotificationToToken(token, title = 'Test Notification', body = 'This is a test message') {
+    try {
+      const message = {
+        notification: {
+          title: title,
+          body: body,
+        },
+        data: {
+          type: 'test',
+          timestamp: new Date().toISOString()
+        },
+        android: {
+          notification: {
+            icon: 'ic_notification',
+            color: '#00D4AA',
+            channelId: 'trading_tips',
+            priority: 'high',
+            defaultSound: true,
+          }
+        },
+        apns: {
+          headers: {
+            'apns-priority': '10',
+            'apns-push-type': 'alert',
+          },
+          payload: {
+            aps: {
+              alert: {
+                title: title,
+                body: body
+              },
+              sound: 'default',
+              badge: 1,
+              'content-available': 1,
+              'mutable-content': 1,
+            }
+          }
+        },
+        token: token
+      };
+      
+      console.log(`📤 Sending notification to token: ${token.substring(0, 20)}...`);
+      const response = await this.messaging.send(message);
+      console.log('✅ Token notification sent:', response);
+      return { success: true, messageId: response };
+      
+    } catch (error) {
+      console.error('❌ Error sending token notification:', error);
+      return { 
+        success: false, 
+        error: error.message,
+        errorCode: error.code 
+      };
     }
   }
 }

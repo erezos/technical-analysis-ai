@@ -19,9 +19,9 @@ class DisclaimerPage extends StatelessWidget {
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
               colors: [
-                Colors.black.withOpacity(0.4),
-                Colors.black.withOpacity(0.5),
-                Colors.black.withOpacity(0.6),
+                Colors.black.withValues(alpha: 0.85),
+                Colors.black.withValues(alpha: 0.9),
+                Colors.black.withValues(alpha: 0.95),
               ],
             ),
           ),

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:share_plus/share_plus.dart';
 import '../models/trading_tip.dart';
+import '../utils/trading_background_utils.dart';
 
 class TradingTipScreen extends StatefulWidget {
   final TradingTip tip;
@@ -127,70 +128,105 @@ class _TradingTipScreenState extends State<TradingTipScreen>
   }
 
   Widget _buildBackgroundImage() {
-    return Positioned.fill(
-      child: CachedNetworkImage(
-        imageUrl: (widget.tip.images['latestTradingCard'] as Map<String, dynamic>?)?['url'] ?? '',
-        fit: BoxFit.cover,
-        placeholder: (context, url) => Container(
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-              colors: [
-                _getSentimentColor(widget.tip.sentiment).withOpacity(0.3),
-                const Color(0xFF121212),
-                const Color(0xFF1A1A1A),
-              ],
+    final networkImageUrl = (widget.tip.images['latestTradingCard'] as Map<String, dynamic>?)?['url'] ?? '';
+    
+    // PRIORITIZE LOCAL BACKGROUNDS for better performance and reliability
+    // Only use network images as absolute fallback (for legacy compatibility)
+    final shouldUseLocal = true; // Force local backgrounds for now
+    
+    // Alternative logic (more conservative):
+    // final shouldUseLocal = networkImageUrl.isEmpty || 
+    //                       networkImageUrl.contains('undefined') ||
+    //                       networkImageUrl.contains('placeholder');
+    
+    if (shouldUseLocal) {
+      // Use our pre-generated backgrounds based on sentiment
+      final backgroundAsset = TradingBackgroundUtils.getRandomBackground(widget.tip.sentiment);
+      
+      return Positioned.fill(
+        child: Image.asset(
+          backgroundAsset,
+          fit: BoxFit.cover,
+          errorBuilder: (context, error, stackTrace) {
+            // Even if local asset fails, try gradient fallback
+            return Container(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    _getSentimentColor(widget.tip.sentiment).withOpacity(0.3),
+                    const Color(0xFF121212),
+                    const Color(0xFF1A1A1A),
+                  ],
+                ),
+              ),
+            );
+          },
+        ),
+      );
+    } else {
+      // Legacy fallback to network images (disabled for now)
+      return Positioned.fill(
+        child: CachedNetworkImage(
+          imageUrl: networkImageUrl,
+          fit: BoxFit.cover,
+          placeholder: (context, url) => Container(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [
+                  _getSentimentColor(widget.tip.sentiment).withOpacity(0.3),
+                  const Color(0xFF121212),
+                  const Color(0xFF1A1A1A),
+                ],
+              ),
+            ),
+            child: const Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  CircularProgressIndicator(
+                    color: Color(0xFF00D4AA),
+                    strokeWidth: 3,
+                  ),
+                  SizedBox(height: 16),
+                  Text(
+                    'Loading Background...',
+                    style: TextStyle(
+                      color: Colors.white70,
+                      fontSize: 16,
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
-          child: const Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                CircularProgressIndicator(
-                  color: Color(0xFF00D4AA),
-                  strokeWidth: 3,
-                ),
-                SizedBox(height: 16),
-                Text(
-                  'Loading AI Background...',
-                  style: TextStyle(
-                    color: Colors.white70,
-                    fontSize: 16,
+          errorWidget: (context, url, error) {
+            // When network image fails, use local background
+            final backgroundAsset = TradingBackgroundUtils.getRandomBackground(widget.tip.sentiment);
+            return Image.asset(
+              backgroundAsset,
+              fit: BoxFit.cover,
+              errorBuilder: (context, error, stackTrace) => Container(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [
+                      _getSentimentColor(widget.tip.sentiment).withOpacity(0.3),
+                      const Color(0xFF121212),
+                      const Color(0xFF1A1A1A),
+                    ],
                   ),
                 ),
-              ],
-            ),
-          ),
+              ),
+            );
+          },
         ),
-        errorWidget: (context, url, error) => Container(
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-              colors: [
-                _getSentimentColor(widget.tip.sentiment).withOpacity(0.3),
-                const Color(0xFF121212),
-                const Color(0xFF1A1A1A),
-              ],
-            ),
-          ),
-          child: const Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(Icons.image_not_supported, size: 64, color: Colors.white54),
-                SizedBox(height: 16),
-                Text(
-                  'AI Background Unavailable',
-                  style: TextStyle(color: Colors.white54, fontSize: 16),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
+      );
+    }
   }
 
   Widget _buildCompanyLogoHeader() {
@@ -260,11 +296,19 @@ class _TradingTipScreenState extends State<TradingTipScreen>
   }
 
   Widget _buildCompanyLogo() {
+    // Get responsive sizing based on screen
+    final screenSize = MediaQuery.of(context).size;
+    final isSmallMobile = screenSize.width <= 375 && screenSize.height <= 812;
+    final isTablet = screenSize.width > 600 || screenSize.height > 900;
+    
+    // Make logo size proportional to content - roughly same height as text block
+    final logoSize = isSmallMobile ? 80.0 : (isTablet ? 120.0 : 96.0);
+    
     if (!widget.tip.hasLogo) {
       // Default logo when no company logo is available
       return Container(
-        width: 64,
-        height: 64,
+        width: logoSize,
+        height: logoSize,
         decoration: BoxDecoration(
           color: _getSentimentColor(widget.tip.sentiment).withOpacity(0.2),
           borderRadius: BorderRadius.circular(12),
@@ -275,7 +319,7 @@ class _TradingTipScreenState extends State<TradingTipScreen>
         ),
         child: Icon(
           Icons.business,
-          size: 32,
+          size: logoSize * 0.5, // Icon size relative to container
           color: _getSentimentColor(widget.tip.sentiment),
         ),
       );
@@ -284,8 +328,8 @@ class _TradingTipScreenState extends State<TradingTipScreen>
     // Check if it's a data URI (fallback emoji logo)
     if (widget.tip.logoUrl.startsWith('data:')) {
       return Container(
-        width: 64,
-        height: 64,
+        width: logoSize,
+        height: logoSize,
         decoration: BoxDecoration(
           color: _getSentimentColor(widget.tip.sentiment).withOpacity(0.1),
           borderRadius: BorderRadius.circular(12),
@@ -297,7 +341,7 @@ class _TradingTipScreenState extends State<TradingTipScreen>
         child: Center(
           child: Text(
             widget.tip.company?.isCrypto == true ? '🪙' : '📈',
-            style: const TextStyle(fontSize: 32),
+            style: TextStyle(fontSize: logoSize * 0.4), // Emoji size relative to container
           ),
         ),
       );
@@ -316,36 +360,57 @@ class _TradingTipScreenState extends State<TradingTipScreen>
       assetPath = 'assets/logos/stocks/${widget.tip.symbol}.png';
     }
     
-    return Container(
-      width: 64,
-      height: 64,
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: _getSentimentColor(widget.tip.sentiment).withOpacity(0.3),
-          width: 2,
+    // PURE FLOATING 3D OBJECT - Responsive size matching text content height!
+    return SizedBox(
+      width: logoSize,
+      height: logoSize,
+      child: Container(
+        // Enhanced multiple shadow layers for realistic 3D floating effect
+        // Scale shadows with logo size for consistent appearance
+        decoration: BoxDecoration(
+          boxShadow: [
+            // Primary shadow for depth
+            BoxShadow(
+              color: Colors.black.withOpacity(0.3),
+              blurRadius: logoSize * 0.15, // Scale blur with size
+              offset: Offset(0, logoSize * 0.08), // Scale offset with size
+              spreadRadius: logoSize * 0.02,
+            ),
+            // Secondary shadow for floating effect
+            BoxShadow(
+              color: Colors.black.withOpacity(0.15),
+              blurRadius: logoSize * 0.25,
+              offset: Offset(0, logoSize * 0.12),
+              spreadRadius: logoSize * 0.04,
+            ),
+            // Colored glow based on sentiment for premium effect
+            BoxShadow(
+              color: _getSentimentColor(widget.tip.sentiment).withOpacity(0.2),
+              blurRadius: logoSize * 0.3,
+              offset: Offset(0, logoSize * 0.06),
+              spreadRadius: logoSize * 0.03,
+            ),
+          ],
         ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.3),
-            blurRadius: 8,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(10),
         child: Image.asset(
           assetPath,
-          fit: BoxFit.contain,
+          fit: BoxFit.contain, // Maintain 3D proportions and transparency
+          // Critical: No color filters or blends to preserve transparency
+          color: null,
+          colorBlendMode: null,
           errorBuilder: (context, error, stackTrace) {
             // Fallback to emoji if asset not found
             return Container(
-              color: _getSentimentColor(widget.tip.sentiment).withOpacity(0.1),
+              width: logoSize,
+              height: logoSize,
+              decoration: BoxDecoration(
+                color: _getSentimentColor(widget.tip.sentiment).withOpacity(0.1),
+                borderRadius: BorderRadius.circular(12),
+              ),
               child: Center(
                 child: Text(
                   widget.tip.company?.isCrypto == true ? '🪙' : '📈',
-                  style: const TextStyle(fontSize: 32),
+                  style: TextStyle(fontSize: logoSize * 0.4),
                 ),
               ),
             );

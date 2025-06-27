@@ -110,7 +110,7 @@ class _HotBoardScreenState extends State<HotBoardScreen>
     final isHighContrast = ResponsiveUtils.isHighContrast(context);
 
     return Scaffold(
-      backgroundColor: Theme.of(context).colorScheme.background,
+      backgroundColor: Theme.of(context).colorScheme.surface,
       appBar: AppBar(
         title: AnimatedDefaultTextStyle(
           duration: ResponsiveUtils.getAnimationDuration(context),
@@ -122,7 +122,7 @@ class _HotBoardScreenState extends State<HotBoardScreen>
               tablet: 24,
             ),
             fontWeight: FontWeight.bold,
-            color: Theme.of(context).colorScheme.onBackground,
+            color: Theme.of(context).colorScheme.onSurface,
           ),
           child: const Text('🔥 Hot Board'),
         ),
@@ -379,7 +379,7 @@ class _HotBoardScreenState extends State<HotBoardScreen>
                   style: TextStyle(
                     fontSize: isTablet ? 24 : (isSmallMobile ? 18 : 20),
                     fontWeight: FontWeight.bold,
-                    color: Theme.of(context).colorScheme.onBackground,
+                    color: Theme.of(context).colorScheme.onSurface,
                   ),
                 ),
               ),
@@ -566,7 +566,7 @@ class _HotBoardScreenState extends State<HotBoardScreen>
                             style: TextStyle(
                               fontSize: isTablet ? 20 : (isSmallMobile ? 16 : 18),
                               fontWeight: FontWeight.bold,
-                              color: Theme.of(context).colorScheme.onBackground,
+                              color: Theme.of(context).colorScheme.onSurface,
                             ),
                           ),
                         ),
@@ -615,7 +615,7 @@ class _HotBoardScreenState extends State<HotBoardScreen>
                         style: TextStyle(
                           fontSize: isTablet ? 18 : (isSmallMobile ? 14 : 16),
                           fontWeight: FontWeight.bold,
-                          color: Theme.of(context).colorScheme.onBackground,
+                          color: Theme.of(context).colorScheme.onSurface,
                         ),
                       ),
                     ),

@@ -1,4 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <color name="ic_launcher_background">#000000</color>
+    
+    <!-- Notification color for Firebase Cloud Messaging -->
+    <color name="notification_color">#00D4AA</color>
+    
+    <!-- Trading app primary colors -->
+    <color name="primary_green">#00D4AA</color>
+    <color name="secondary_green">#4ECDC4</color>
+    <color name="bullish_green">#4CAF50</color>
+    <color name="bearish_red">#F44336</color>
 </resources>

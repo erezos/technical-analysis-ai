@@ -125,8 +125,16 @@ async function analyzeSymbol(symbol, timeframe) {
       console.log('💾 Saving trading tip with background images...');
       
       // Get company information with robust logo fallback
-      const company = logoUtils.getStockCompanyInfo(analysis.symbol);
-      console.log(`🏢 Company: ${company.name} | Logo: ${company.logoUrl.includes('data:') ? 'DEFAULT FALLBACK' : 'LOCAL FILE'}`);
+      let company;
+      const isCrypto = analysis.symbol.includes('/'); // Crypto pairs contain '/' like BTC/USDT
+      
+      if (isCrypto) {
+        company = logoUtils.getCryptoCompanyInfo(analysis.symbol);
+        console.log(`💎 Crypto: ${company.name} | Logo: ${company.logoUrl.includes('data:') ? 'DEFAULT FALLBACK' : 'LOCAL FILE'}`);
+      } else {
+        company = logoUtils.getStockCompanyInfo(analysis.symbol);
+        console.log(`🏢 Company: ${company.name} | Logo: ${company.logoUrl.includes('data:') ? 'DEFAULT FALLBACK' : 'LOCAL FILE'}`);
+      }
 
       const tipData = {
         symbol: analysis.symbol,

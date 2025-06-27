@@ -13,7 +13,6 @@ if (!admin.apps.length) {
 
 // Define secrets
 const taapiApiKey = defineSecret('TAAPI_API_KEY');
-const openaiApiKey = defineSecret('OPENAI_API_KEY');
 
 // Set global options
 setGlobalOptions({
@@ -830,6 +829,26 @@ function selectBestSignalByPriority(signals, lastTips) {
 // Upload signal to Firebase using existing service pattern
 async function uploadSignalToFirebase(signal) {
   try {
+    // 🚨 BUG FIX: Detect if symbol is crypto vs stock and get correct company info
+    let company;
+    const isCrypto = signal.symbol.includes('/'); // Crypto pairs contain '/' like BTC/USDT
+    
+    if (isCrypto) {
+      // Use crypto info function
+      const cryptoData = getCryptoInfo(signal.symbol);
+      company = {
+        name: cryptoData.name,
+        symbol: signal.symbol,
+        logoUrl: cryptoData.logoUrl,
+        sector: 'Cryptocurrency',
+        business: 'Digital Asset',
+        isCrypto: true
+      };
+    } else {
+      // Use stock company info
+      company = await getCompanyInfo(signal.symbol);
+    }
+    
     // Convert our signal format to the format expected by tradingTipsService
     const tipData = {
       symbol: signal.symbol,
@@ -843,15 +862,15 @@ async function uploadSignalToFirebase(signal) {
       confidence: signal.confidence,
       reasoning: signal.reasoning,
       indicators: signal.indicators,
-      // Add company information (we'll need to get this)
-      company: await getCompanyInfo(signal.symbol),
+      // Fixed company information with proper crypto/stock detection
+      company: company,
       metadata: {
         generatedAt: new Date().toISOString(),
         strategy: 'firebase_priority_selector_v1',
         source: 'comprehensive_analysis'
       }
     };
-    
+
     // Use the same upload mechanism as your local scripts
     // For now, we'll save directly to Firestore (later we can add image generation)
     const timestamp = admin.firestore.FieldValue.serverTimestamp();
@@ -886,57 +905,124 @@ async function uploadSignalToFirebase(signal) {
   }
 }
 
-// Get company info (simplified version)
+// Get company info (enhanced with crypto detection)
 async function getCompanyInfo(symbol) {
-  // For now, return basic info
-  // Later we can integrate with your existing company lookup logic
-  return {
-    name: symbol,
-    symbol: symbol,
-    logoUrl: `assets/logos/stocks/${symbol}.png`,
-    sector: 'Unknown',
-    business: 'Stock Analysis',
-    isCrypto: false
-  };
+  // 🚨 BUG FIX: Detect crypto vs stock and return appropriate data
+  const isCrypto = symbol.includes('/'); // Crypto pairs contain '/' like BTC/USDT
+  
+  if (isCrypto) {
+    // This shouldn't happen since we handle crypto separately, but safety fallback
+    const cryptoData = getCryptoInfo(symbol);
+    return {
+      name: cryptoData.name,
+      symbol: symbol,
+      logoUrl: cryptoData.logoUrl,
+      sector: 'Cryptocurrency',
+      business: 'Digital Asset',
+      isCrypto: true
+    };
+  } else {
+    // Stock symbol - return stock info
+    return {
+      name: symbol,
+      symbol: symbol,
+      logoUrl: `assets/logos/stocks/${symbol}.png`,
+      sector: 'Unknown',
+      business: 'Stock Analysis',
+      isCrypto: false
+    };
+  }
 }
 
-// Core logic for generating trading tips (used by both HTTP and scheduled functions)
-async function executeFullTradingTipGeneration(specificTimeframe = null) {
+// Core logic for generating trading tips (cleaned up - no background generation)
+async function executeFullTradingTipGeneration(specificTimeframe = null, availableTimeframes = null) {
   try {
     console.log('🚀 Starting COMPLETE trading tip generation...');
-    if (specificTimeframe) {
-      console.log(`🎯 Specific timeframe requested: ${specificTimeframe}`);
+    
+    // Determine which timeframe to target
+    let targetTimeframe = specificTimeframe;
+    
+    if (!targetTimeframe && availableTimeframes && availableTimeframes.length > 0) {
+      // Auto-select next available timeframe (prioritize short_term, then mid_term, then long_term)
+      const priority = ['short_term', 'mid_term', 'long_term'];
+      targetTimeframe = priority.find(tf => availableTimeframes.includes(tf)) || availableTimeframes[0];
+      console.log(`🎯 Auto-selected timeframe: ${targetTimeframe} from available: [${availableTimeframes.join(', ')}]`);
+    } else if (targetTimeframe) {
+      console.log(`🎯 Specific timeframe requested: ${targetTimeframe}`);
+    } else {
+      console.log('🔄 No timeframe specified - will analyze all timeframes');
     }
     
     // Get API keys from Firebase secrets
     let taapi_key = taapiApiKey.value().replace(/^["']|["']$/g, '').trim();
-    let openai_key = openaiApiKey.value().replace(/^["']|["']$/g, '').trim();
     
-    console.log('🔑 API Keys available:', !!taapi_key, !!openai_key);
+    console.log('🔑 API Keys available:', !!taapi_key);
     
     // Run comprehensive analysis to get the best signal
-    const bestSignal = await runComprehensiveAnalysis(taapi_key, specificTimeframe);
+    let bestSignal = null;
+    
+    if (targetTimeframe) {
+      // Single timeframe mode - try the specific timeframe
+      console.log(`🎯 Analyzing specific timeframe: ${targetTimeframe}`);
+      bestSignal = await runComprehensiveAnalysis(taapi_key, targetTimeframe, null);
+      
+      if (!bestSignal && availableTimeframes && availableTimeframes.length > 1) {
+        // If no signal found in target timeframe, try other available timeframes
+        console.log(`⚠️ No strong signal in ${targetTimeframe}, trying other available timeframes...`);
+        const otherTimeframes = availableTimeframes.filter(tf => tf !== targetTimeframe);
+        
+        for (const timeframe of otherTimeframes) {
+          console.log(`🔄 Trying ${timeframe} timeframe...`);
+          bestSignal = await runComprehensiveAnalysis(taapi_key, timeframe, null);
+          if (bestSignal) {
+            console.log(`✅ Found signal in ${timeframe} timeframe!`);
+            break;
+          }
+        }
+      }
+    } else {
+      // Multi-timeframe mode - analyze all available timeframes and pick best
+      console.log('🔄 Multi-timeframe analysis mode');
+      bestSignal = await runComprehensiveAnalysis(taapi_key, null, availableTimeframes);
+    }
     
     if (!bestSignal) {
-      const timeframeMsg = specificTimeframe ? ` for ${specificTimeframe} timeframe` : '';
+      const timeframeMsg = targetTimeframe ? ` for ${targetTimeframe} timeframe` : 
+                          availableTimeframes?.length > 0 ? ` for available timeframes: [${availableTimeframes.join(', ')}]` : '';
       throw new Error(`No strong trading signals found${timeframeMsg}`);
     }
     
-    console.log('💎 Best signal found:', bestSignal.symbol, bestSignal.sentiment);
+    console.log('💎 Best signal found:', bestSignal.symbol, bestSignal.sentiment, `(${bestSignal.timeframe})`);
     
     // Get enhanced company information
-    const companyInfo = await getEnhancedCompanyInfo(bestSignal.symbol);
+    // 🚨 BUG FIX: Detect if symbol is crypto vs stock and get correct company info
+    let companyInfo;
+    const isCrypto = bestSignal.symbol.includes('/'); // Crypto pairs contain '/' like BTC/USDT
     
-    // Generate DALL-E background image
-    console.log('🎨 Generating DALL-E background image...');
-    const backgroundImageUrl = await generateTradingBackgroundImage(bestSignal, openai_key);
+    if (isCrypto) {
+      // Use crypto info function (already exists in this file)
+      const cryptoData = getCryptoInfo(bestSignal.symbol);
+      companyInfo = {
+        name: cryptoData.name,
+        symbol: bestSignal.symbol,
+        logoUrl: cryptoData.logoUrl,
+        sector: 'Cryptocurrency',
+        business: 'Digital Asset',
+        isCrypto: true
+      };
+      console.log(`💎 Crypto company info: ${companyInfo.name}`);
+    } else {
+      // Use stock company info
+      companyInfo = await getEnhancedCompanyInfo(bestSignal.symbol);
+      console.log(`🏢 Stock company info: ${companyInfo.name}`);
+    }
     
-    // Download and upload image to Cloud Storage
-    console.log('☁️ Uploading to Cloud Storage...');
-    const storageResult = await uploadImagesToStorage(bestSignal, backgroundImageUrl);
+    // 🎯 CLEAN DATA STRUCTURE - App handles all visuals locally
+    console.log('💾 Preparing clean trading data for app...');
     
-    // Prepare complete tip data structure
+    // Prepare minimal, clean tip data structure
     const completeTipData = {
+      // Core trading data
       symbol: bestSignal.symbol,
       timeframe: bestSignal.timeframe,
       sentiment: bestSignal.sentiment,
@@ -951,34 +1037,19 @@ async function executeFullTradingTipGeneration(specificTimeframe = null) {
       keyLevels: bestSignal.keyLevels,
       currentPrice: bestSignal.currentPrice,
       indicators: bestSignal.indicators,
+      
+      // Company info (app uses this for 3D token path and sentiment backgrounds)
       company: companyInfo,
       
-      // Background images structure
-      backgroundImages: {
-        titledBackground: {
-          url: storageResult.backgroundUrl,
-          fileName: storageResult.backgroundFileName,
-          generatedAt: new Date(),
-          hasTitle: true,
-          title: `${bestSignal.symbol} - ${bestSignal.sentiment.toUpperCase()} - ${formatTimeframe(bestSignal.timeframe)}`
-        }
-      },
-      
-      // Legacy structure for app compatibility
+      // MINIMAL BACKWARD COMPATIBILITY: Empty placeholders for old app versions
       images: {
         latestTradingCard: { 
-          url: storageResult.latestTradingCardUrl,
-          type: 'titled_background' 
+          url: 'local_assets', // Placeholder - app ignores this
+          type: 'local_assets' 
         }
       },
       
-      // Quick access references
-      latestBackground: {
-        url: storageResult.backgroundUrl,
-        type: 'titled_background',
-        hasTitle: true
-      },
-      
+      // Metadata
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
       updatedAt: admin.firestore.FieldValue.serverTimestamp()
     };
@@ -1000,7 +1071,6 @@ async function executeFullTradingTipGeneration(specificTimeframe = null) {
       tip: completeTipData,
       signal: bestSignal,
       company: companyInfo,
-      images: storageResult,
       notification: notificationResult,
       stats: statsResult,
       timestamp: new Date().toISOString()
@@ -1018,7 +1088,7 @@ async function executeFullTradingTipGeneration(specificTimeframe = null) {
 
 // Enhanced function with complete flow - DALL-E images, storage, stats, notifications
 exports.generateFullTradingTip = onRequest({
-  secrets: [taapiApiKey, openaiApiKey],
+  secrets: [taapiApiKey],
   memory: '2GiB',
   timeoutSeconds: 540,
 }, async (req, res) => {
@@ -1041,72 +1111,7 @@ exports.generateFullTradingTip = onRequest({
   }
 });
 
-// DALL-E Image Generation - written directly in Firebase function
-async function generateTradingBackgroundImage(analysis, openaiApiKey) {
-  try {
-    const prompt = createCompanyBackgroundPrompt(analysis);
-    
-    const response = await fetch('https://api.openai.com/v1/images/generations', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${openaiApiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: "dall-e-3",
-        prompt: prompt,
-        n: 1,
-        size: "1024x1024",
-        quality: "hd",
-        style: "natural"
-      })
-    });
-    
-    const data = await response.json();
-    
-    if (!response.ok) {
-      throw new Error(`OpenAI API error: ${data.error?.message || 'Unknown error'}`);
-    }
-    
-    const imageUrl = data.data[0].url;
-    console.log('✅ Generated DALL-E background image');
-    return imageUrl;
-    
-  } catch (error) {
-    console.error('❌ Error generating background image:', error);
-    throw error;
-  }
-}
 
-// Create DALL-E prompt - written directly in Firebase function
-function createCompanyBackgroundPrompt(analysis) {
-  const symbol = analysis.symbol;
-  const sentiment = analysis.sentiment;
-  const timeframe = formatTimeframe(analysis.timeframe);
-  const isBullish = sentiment === 'bullish';
-  
-  // Enhanced company information
-  const companyInfo = {
-    'AAPL': { name: 'Apple Inc.', business: 'iPhone, iPad, Mac technology', colors: 'silver, space gray, white' },
-    'MSFT': { name: 'Microsoft', business: 'Windows, Office, Azure cloud', colors: 'blue, white' },
-    'GOOGL': { name: 'Alphabet Inc.', business: 'Google search, YouTube, Android', colors: 'blue, red, yellow, green' },
-    'TSLA': { name: 'Tesla', business: 'electric vehicles, sustainable energy', colors: 'red, white, sleek' },
-    'AMZN': { name: 'Amazon', business: 'e-commerce, AWS cloud, delivery', colors: 'orange, black' },
-    'META': { name: 'Meta', business: 'Facebook, Instagram, WhatsApp', colors: 'blue, white' },
-    'NVDA': { name: 'NVIDIA', business: 'AI chips, gaming graphics', colors: 'green, black' },
-    'NFLX': { name: 'Netflix', business: 'streaming movies and TV shows', colors: 'red, black' },
-    'CRM': { name: 'Salesforce', business: 'cloud CRM, business automation', colors: 'blue, white' },
-    'AMD': { name: 'AMD', business: 'computer processors, gaming chips', colors: 'red, black' }
-    // Add more as needed
-  };
-
-  const company = companyInfo[symbol] || { name: symbol, business: 'technology services', colors: 'blue, white' };
-  const sentimentColor = isBullish ? 'green' : 'red';
-  
-  return `Professional trading background texture themed around ${company.business}. Dark charcoal navy base with ${sentimentColor} accent lighting. Clean space at the top for logo placement. Very subtle semi-transparent elements related to ${company.business} scattered throughout at 20% opacity. Faded ${sentimentColor} candlestick charts and trading graphs at 30% opacity in background. ${isBullish ? 'Subtle upward trending arrows and growth elements' : 'Subtle downward trending arrows and analytical elements'} at 25% opacity. 
-
-Company theme: ${company.colors} color palette with ${company.business} visual elements. All background elements extremely subtle and faded. Large clean areas for content overlay. Vertical format 9:16 ratio. Professional fintech aesthetic with ${sentimentColor} sentiment theming. Photo style background texture. High quality and detailed.`;
-}
 
 // Enhanced company information - written directly in Firebase function
 // Complete database matching local logoUtils.js for full feature parity
@@ -1545,58 +1550,6 @@ async function getEnhancedCompanyInfo(symbol) {
   };
 }
 
-// Cloud Storage upload - written directly in Firebase function  
-async function uploadImagesToStorage(analysis, backgroundImageUrl) {
-  try {
-    const bucket = admin.storage().bucket();
-    const date = new Date().toISOString().split('T')[0];
-    const { symbol, timeframe } = analysis;
-    
-    // Download image from DALL-E URL
-    console.log('⬇️ Downloading image from DALL-E...');
-    const response = await fetch(backgroundImageUrl);
-    if (!response.ok) {
-      throw new Error(`Failed to download image: ${response.statusText}`);
-    }
-    const imageBuffer = Buffer.from(await response.arrayBuffer());
-    
-    // Save as latest trading card
-    const latestTradingCardFile = bucket.file(`latest_images/${timeframe}_trading_card.png`);
-    await latestTradingCardFile.save(imageBuffer, {
-      metadata: { contentType: 'image/png' }
-    });
-    
-    // Save backup in backgrounds folder
-    const backgroundFileName = `${symbol}_${date}_${timeframe}_background.png`;
-    const backgroundFile = bucket.file(`trading_backgrounds/${backgroundFileName}`);
-    await backgroundFile.save(imageBuffer, {
-      metadata: { contentType: 'image/png' }
-    });
-    
-    // Generate signed URLs
-    const [backgroundUrl] = await backgroundFile.getSignedUrl({
-      action: 'read',
-      expires: Date.now() + 30 * 24 * 60 * 60 * 1000 // 30 days
-    });
-    
-    const [latestTradingCardUrl] = await latestTradingCardFile.getSignedUrl({
-      action: 'read',
-      expires: Date.now() + 30 * 24 * 60 * 60 * 1000 // 30 days
-    });
-    
-    console.log('✅ Images uploaded to Cloud Storage');
-    
-    return {
-      backgroundUrl,
-      backgroundFileName,
-      latestTradingCardUrl
-    };
-    
-  } catch (error) {
-    console.error('❌ Error uploading to storage:', error);
-    throw error;
-  }
-}
 
 // App statistics update - written directly in Firebase function
 async function updateAppStats() {
@@ -1681,17 +1634,18 @@ async function sendTipNotification(tipData, company) {
     const title = `🚀 New ${timeframeDisplay} Tip: ${companyName}`;
     const body = `${sentiment.toUpperCase()} signal (${Math.abs(strength).toFixed(1)}) - Entry: $${entryPrice?.toFixed(2) || 'TBD'}`;
     
-    // Build the notification message with enhanced analytics data
+    // Build the notification message with enhanced iOS and Android configuration
     const message = {
       notification: {
         title: title,
         body: body,
       },
       data: {
-        // Core trading data
+        // Core trading data for deep-linking
         type: 'trading_tip',
         symbol: symbol,
         timeframe: timeframe,
+        target_timeframe: timeframe, // CRITICAL: For deep-linking navigation
         sentiment: sentiment,
         strength: strength.toString(),
         companyName: companyName,
@@ -1709,28 +1663,51 @@ async function sendTipNotification(tipData, company) {
       },
       android: {
         notification: {
-          icon: 'ic_notification',
+          icon: 'launcher_icon', // Use app icon for notifications
           color: sentiment === 'bullish' ? '#4CAF50' : '#F44336',
           channelId: 'trading_tips',
           priority: 'high',
           defaultSound: true,
           defaultVibrateTimings: true,
-          // Add analytics tag for Android
-          tag: messageId,
+          defaultLightSettings: true,
+          tag: messageId, // Analytics tag
+          notificationCount: 1, // Show notification count
+          clickAction: 'FLUTTER_NOTIFICATION_CLICK', // Deep-linking action
+        },
+        data: {
+          // Additional Android-specific data
+          click_action: 'FLUTTER_NOTIFICATION_CLICK',
+          route: '/trading_tip',
+          target_timeframe: timeframe,
         }
       },
       apns: {
+        headers: {
+          'apns-priority': '10', // High priority for immediate delivery
+          'apns-push-type': 'alert', // Required for visible notifications
+          'apns-collapse-id': `trading_tip_${symbol}`, // Collapse similar notifications
+        },
         payload: {
           aps: {
+            alert: {
+              title: title,
+              body: body,
+            },
             sound: 'default',
             badge: 1,
             category: 'TRADING_TIP',
-            // Add custom analytics data for iOS
-            'custom-data': {
-              messageId: messageId,
-              symbol: symbol,
-              sentiment: sentiment
-            }
+            'content-available': 1, // Enable background processing
+            'mutable-content': 1, // Allow notification service extension
+            'thread-id': `trading_${symbol}`, // Group notifications by symbol
+          },
+          // Custom data for iOS deep-linking
+          customData: {
+            type: 'trading_tip',
+            symbol: symbol,
+            timeframe: timeframe,
+            target_timeframe: timeframe, // CRITICAL: For iOS deep-linking
+            sentiment: sentiment,
+            messageId: messageId,
           }
         }
       },
@@ -1743,7 +1720,10 @@ async function sendTipNotification(tipData, company) {
       title: message.notification.title,
       body: message.notification.body,
       symbol: symbol,
-      sentiment: sentiment
+      sentiment: sentiment,
+      timeframe: timeframe,
+      androidChannelId: message.android.notification.channelId,
+      apnsPriority: message.apns.headers['apns-priority'],
     });
     
     // Send the notification using Firebase Admin
@@ -1764,6 +1744,12 @@ async function sendTipNotification(tipData, company) {
         body: body,
         timestamp: admin.firestore.FieldValue.serverTimestamp(),
         server_timestamp: Date.now(),
+        target_topic: 'trading_tips',
+        platform_config: {
+          android_channel: 'trading_tips',
+          ios_category: 'TRADING_TIP',
+          deep_link_enabled: true,
+        }
       });
       console.log('📊 Notification analytics logged');
     } catch (analyticsError) {
@@ -1789,7 +1775,7 @@ async function sendTipNotification(tipData, company) {
 }
 
 // Comprehensive analysis function - runs full market scan and selects best signal
-async function runComprehensiveAnalysis(apiKey, specificTimeframe = null) {
+async function runComprehensiveAnalysis(apiKey, specificTimeframe = null, availableTimeframes = null) {
   try {
     console.log('🔍 Running comprehensive market analysis...');
     
@@ -1801,14 +1787,22 @@ async function runComprehensiveAnalysis(apiKey, specificTimeframe = null) {
       'GE', 'F', 'GM', 'PYPL', 'UBER'
     ];
     
-    // Determine timeframes to analyze
-    const allTimeframes = ['short_term', 'mid_term', 'long_term'];
-    const timeframes = specificTimeframe ? [specificTimeframe] : allTimeframes;
+    // Determine timeframes to analyze based on availability and request
+    let timeframes = [];
     
-    console.log(`⏰ Analyzing timeframes: ${timeframes.join(', ')}`);
     if (specificTimeframe) {
+      // Single timeframe requested
+      timeframes = [specificTimeframe];
       console.log(`🎯 Single timeframe mode: ${specificTimeframe}`);
+    } else if (availableTimeframes && availableTimeframes.length > 0) {
+      // Use available timeframes (prioritize short_term first for better user experience)
+      const priority = ['short_term', 'mid_term', 'long_term'];
+      timeframes = priority.filter(tf => availableTimeframes.includes(tf));
+      console.log(`⏰ Available timeframes mode: ${timeframes.join(', ')}`);
+      console.log(`📋 All available: [${availableTimeframes.join(', ')}]`);
     } else {
+      // Fallback to all timeframes
+      timeframes = ['short_term', 'mid_term', 'long_term'];
       console.log(`🔄 Full analysis mode: all timeframes`);
     }
     
@@ -1853,12 +1847,30 @@ async function runComprehensiveAnalysis(apiKey, specificTimeframe = null) {
       return null;
     }
     
-    // Sort by strength (highest absolute value first)
-    strongSignals.sort((a, b) => Math.abs(b.strength) - Math.abs(a.strength));
+    // If we have a specific timeframe or limited available timeframes, prioritize accordingly
+    if (specificTimeframe || (availableTimeframes && availableTimeframes.length > 0)) {
+      // Filter signals to only include requested/available timeframes
+      const targetTimeframes = specificTimeframe ? [specificTimeframe] : availableTimeframes;
+      const filteredSignals = strongSignals.filter(signal => 
+        targetTimeframes.includes(signal.timeframe)
+      );
+      
+      if (filteredSignals.length > 0) {
+        // Sort by strength (highest absolute value first)
+        filteredSignals.sort((a, b) => Math.abs(b.strength) - Math.abs(a.strength));
+        const bestSignal = filteredSignals[0];
+        console.log(`🏆 Best signal from ${targetTimeframes.join('/')}: ${bestSignal.symbol} (${bestSignal.timeframe}) - Strength: ${bestSignal.strength}`);
+        return bestSignal;
+      } else {
+        console.log(`⚠️ No strong signals found in requested timeframes: [${targetTimeframes.join(', ')}]`);
+        return null;
+      }
+    }
     
-    // Return the strongest signal
+    // Default behavior: return strongest signal overall
+    strongSignals.sort((a, b) => Math.abs(b.strength) - Math.abs(a.strength));
     const bestSignal = strongSignals[0];
-    console.log(`🏆 Best signal: ${bestSignal.symbol} (${bestSignal.timeframe}) - Strength: ${bestSignal.strength}`);
+    console.log(`🏆 Best signal overall: ${bestSignal.symbol} (${bestSignal.timeframe}) - Strength: ${bestSignal.strength}`);
     
     return bestSignal;
     
@@ -1903,11 +1915,11 @@ exports.testNotification = onRequest({
   }
 });
 
-// Scheduled function that runs every 30 minutes ONLY during market hours
+// Scheduled function that runs every 30 minutes ONLY during market hours (updated for per-timeframe tracking)
 exports.scheduledTradingTipGenerator = onSchedule({
   schedule: '*/30 9-15 * * 1-5', // Every 30 minutes from 9:00-15:59 (9 AM to 3:59 PM) ET, Mon-Fri
   timeZone: 'America/New_York', // US Eastern Time (handles DST automatically)
-  secrets: [taapiApiKey, openaiApiKey],
+  secrets: [taapiApiKey],
   memory: '2GiB',
   timeoutSeconds: 540, // 9 minutes timeout for full analysis
 }, async (event) => {
@@ -1918,23 +1930,63 @@ exports.scheduledTradingTipGenerator = onSchedule({
     const shouldRun = await checkMarketHoursAndDailyLimit();
     if (!shouldRun.canRun) {
       console.log('⏸️ Skipping execution:', shouldRun.reason);
-      return { success: false, reason: shouldRun.reason };
+      return { 
+        success: false, 
+        reason: shouldRun.reason,
+        availableTimeframes: shouldRun.availableTimeframes || []
+      };
     }
     
     console.log('✅ Market is open and conditions met, proceeding with analysis...');
+    console.log(`📊 Available timeframes: [${shouldRun.availableTimeframes.join(', ')}]`);
     
-    // Only run expensive operations if validation passes
-    const result = await executeFullTradingTipGeneration();
+    // Run with available timeframes (will auto-select the next priority timeframe)
+    const result = await executeFullTradingTipGeneration(null, shouldRun.availableTimeframes);
     
     if (result.success) {
-      console.log('🎉 Successfully generated and uploaded trading tip:', result.tip.symbol);
+      const generatedTimeframe = result.tip.timeframe;
+      console.log(`🎉 Successfully generated and uploaded trading tip: ${result.tip.symbol} (${generatedTimeframe})`);
       
-      // Mark that we've run successfully today
-      await markDailyExecution();
-      return { success: true, tip: result.tip };
+      // Mark that we've run successfully for this timeframe
+      await markDailyExecution(generatedTimeframe);
+      
+      // Check remaining timeframes
+      const now = new Date();
+      const easternTime = new Intl.DateTimeFormat('en-US', {
+        timeZone: 'America/New_York',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit'
+      }).formatToParts(now);
+      
+      const etYear = parseInt(easternTime.find(part => part.type === 'year').value);
+      const etMonth = parseInt(easternTime.find(part => part.type === 'month').value) - 1;
+      const etDay = parseInt(easternTime.find(part => part.type === 'day').value);
+      const etDate = new Date(etYear, etMonth, etDay);
+      
+      const remainingTimeframes = await getAvailableTimeframes(etDate);
+      
+      console.log(`📋 Remaining timeframes for today: [${remainingTimeframes.join(', ')}]`);
+      
+      if (remainingTimeframes.length === 0) {
+        console.log('🏁 All timeframes completed for today!');
+      } else {
+        console.log(`⏳ ${remainingTimeframes.length} timeframes still needed today`);
+      }
+      
+      return { 
+        success: true, 
+        tip: result.tip,
+        completedTimeframe: generatedTimeframe,
+        remainingTimeframes: remainingTimeframes
+      };
     } else {
       console.log('❌ Failed to generate trading tip:', result.error);
-      return { success: false, error: result.error };
+      return { 
+        success: false, 
+        error: result.error,
+        availableTimeframes: shouldRun.availableTimeframes
+      };
     }
     
   } catch (error) {
@@ -1943,8 +1995,8 @@ exports.scheduledTradingTipGenerator = onSchedule({
   }
 });
 
-// Function to check market hours and daily execution limit
-async function checkMarketHoursAndDailyLimit() {
+// Function to check market hours and daily execution limit (updated for per-timeframe tracking)
+async function checkMarketHoursAndDailyLimit(requestedTimeframe = null) {
   // Get current time in Eastern Time (handles DST automatically)
   const now = new Date();
   const easternTime = new Intl.DateTimeFormat('en-US', {
@@ -1971,13 +2023,30 @@ async function checkMarketHoursAndDailyLimit() {
   // OPTIMIZATION 1: Check weekend first (fastest check)
   const dayOfWeek = etDateTime.getDay();
   if (dayOfWeek === 0 || dayOfWeek === 6) {
-    return { canRun: false, reason: 'Weekend - market closed' };
+    return { canRun: false, reason: 'Weekend - market closed', availableTimeframes: [] };
   }
   
-  // OPTIMIZATION 2: Check if already executed today (avoid expensive operations)
-  const hasRunToday = await checkDailyExecution(etDateTime);
-  if (hasRunToday) {
-    return { canRun: false, reason: 'Already generated trading tip today' };
+  // OPTIMIZATION 2: Check available timeframes (avoid expensive operations if all completed)
+  const availableTimeframes = await getAvailableTimeframes(etDateTime);
+  
+  if (requestedTimeframe) {
+    // Check specific timeframe
+    if (!availableTimeframes.includes(requestedTimeframe)) {
+      return { 
+        canRun: false, 
+        reason: `${requestedTimeframe} tip already generated today`,
+        availableTimeframes: availableTimeframes
+      };
+    }
+  } else {
+    // Check if any timeframes available
+    if (availableTimeframes.length === 0) {
+      return { 
+        canRun: false, 
+        reason: 'All timeframes completed for today',
+        availableTimeframes: []
+      };
+    }
   }
   
   // OPTIMIZATION 3: Precise market hours check (9:30 AM to 4:00 PM ET)
@@ -1988,24 +2057,40 @@ async function checkMarketHoursAndDailyLimit() {
   
   if (timeInMinutes < earliestRunMinutes) {
     const currentTimeStr = `${etHour}:${etMinute.toString().padStart(2, '0')}`;
-    return { canRun: false, reason: `Too early - waiting until 9:40 AM ET (current: ${currentTimeStr} ET)` };
+    return { 
+      canRun: false, 
+      reason: `Too early - waiting until 9:40 AM ET (current: ${currentTimeStr} ET)`,
+      availableTimeframes: availableTimeframes
+    };
   }
   
   if (timeInMinutes >= marketCloseMinutes) {
     const currentTimeStr = `${etHour}:${etMinute.toString().padStart(2, '0')}`;
-    return { canRun: false, reason: `Market closed - closes at 4:00 PM ET (current: ${currentTimeStr} ET)` };
+    return { 
+      canRun: false, 
+      reason: `Market closed - closes at 4:00 PM ET (current: ${currentTimeStr} ET)`,
+      availableTimeframes: availableTimeframes
+    };
   }
   
   // OPTIMIZATION 4: Check holidays last (least likely to fail)
   const isHoliday = await checkMarketHoliday(etDateTime);
   if (isHoliday) {
-    return { canRun: false, reason: 'Market holiday' };
+    return { 
+      canRun: false, 
+      reason: 'Market holiday',
+      availableTimeframes: []
+    };
   }
   
   const currentTimeStr = `${etHour}:${etMinute.toString().padStart(2, '0')}`;
+  const timeframeMsg = requestedTimeframe ? ` for ${requestedTimeframe}` : ` (${availableTimeframes.length} timeframes available)`;
+  
   return { 
     canRun: true, 
-    reason: `Market open and no tip generated today (${currentTimeStr} ET)` 
+    reason: `Market open and tips needed${timeframeMsg} (${currentTimeStr} ET)`,
+    availableTimeframes: availableTimeframes,
+    requestedTimeframe: requestedTimeframe
   };
 }
 
@@ -2033,8 +2118,8 @@ async function checkMarketHoliday(etDateTime) {
   return allHolidays.includes(dateString);
 }
 
-// Check if we've already run successfully today
-async function checkDailyExecution(etDateTime) {
+// Check if we've already run successfully today for a specific timeframe
+async function checkDailyExecution(etDateTime, timeframe = null) {
   try {
     const today = etDateTime.toISOString().split('T')[0]; // YYYY-MM-DD format
     
@@ -2045,7 +2130,20 @@ async function checkDailyExecution(etDateTime) {
     if (doc.exists) {
       const data = doc.data();
       console.log('📋 Daily execution record found:', data);
-      return data.success === true;
+      
+      // If no specific timeframe requested, check if ANY timeframe was completed today (legacy mode)
+      if (!timeframe) {
+        return data.success === true || data.completedTimeframes?.length > 0;
+      }
+      
+      // Check if specific timeframe was completed
+      const completedTimeframes = data.completedTimeframes || [];
+      const isTimeframeComplete = completedTimeframes.includes(timeframe);
+      
+      console.log(`📊 Timeframe ${timeframe} completion status:`, isTimeframeComplete);
+      console.log(`📋 Completed timeframes today:`, completedTimeframes);
+      
+      return isTimeframeComplete;
     }
     
     return false;
@@ -2055,8 +2153,8 @@ async function checkDailyExecution(etDateTime) {
   }
 }
 
-// Mark that we've successfully executed today
-async function markDailyExecution() {
+// Mark that we've successfully executed today for a specific timeframe
+async function markDailyExecution(timeframe = null) {
   try {
     const now = new Date();
     const easternTime = new Intl.DateTimeFormat('en-US', {
@@ -2076,21 +2174,71 @@ async function markDailyExecution() {
     const db = admin.firestore();
     const executionRef = db.collection('scheduled_executions').doc(today);
     
-    await executionRef.set({
-      success: true,
-      timestamp: new Date().toISOString(),
-      easternDate: today
-    });
-    
-    console.log('✅ Marked daily execution as complete for:', today);
+    if (!timeframe) {
+      // Legacy mode - mark general success
+      await executionRef.set({
+        success: true,
+        timestamp: new Date().toISOString(),
+        easternDate: today
+      });
+      console.log('✅ Marked daily execution as complete for:', today);
+    } else {
+      // New mode - mark specific timeframe completion
+      const doc = await executionRef.get();
+      const existingData = doc.exists ? doc.data() : {};
+      const completedTimeframes = existingData.completedTimeframes || [];
+      
+      if (!completedTimeframes.includes(timeframe)) {
+        completedTimeframes.push(timeframe);
+        
+        const updateData = {
+          completedTimeframes: completedTimeframes,
+          lastUpdated: new Date().toISOString(),
+          easternDate: today,
+          [`${timeframe}_timestamp`]: new Date().toISOString(),
+          // Keep legacy success flag for backward compatibility
+          success: completedTimeframes.length > 0
+        };
+        
+        await executionRef.set(updateData, { merge: true });
+        
+        console.log(`✅ Marked ${timeframe} execution as complete for:`, today);
+        console.log(`📊 Total completed timeframes today:`, completedTimeframes);
+      } else {
+        console.log(`⚠️ Timeframe ${timeframe} already marked as complete for today`);
+      }
+    }
   } catch (error) {
     console.error('❌ Error marking daily execution:', error);
   }
 }
 
-// Manual trigger for testing (HTTP function)
+// Check which timeframes still need tips today
+async function getAvailableTimeframes(etDateTime) {
+  try {
+    const allTimeframes = ['short_term', 'mid_term', 'long_term'];
+    const availableTimeframes = [];
+    
+    for (const timeframe of allTimeframes) {
+      const isCompleted = await checkDailyExecution(etDateTime, timeframe);
+      if (!isCompleted) {
+        availableTimeframes.push(timeframe);
+      }
+    }
+    
+    console.log(`⏰ Available timeframes for today:`, availableTimeframes);
+    console.log(`✅ Completed timeframes today:`, allTimeframes.filter(tf => !availableTimeframes.includes(tf)));
+    
+    return availableTimeframes;
+  } catch (error) {
+    console.error('❌ Error getting available timeframes:', error);
+    return ['short_term', 'mid_term', 'long_term']; // Return all if error
+  }
+}
+
+// Manual trigger for testing (HTTP function) - updated for per-timeframe tracking
 exports.triggerScheduledAnalysis = onRequest({
-  secrets: [taapiApiKey, openaiApiKey],
+  secrets: [taapiApiKey],
   cors: true,
 }, async (req, res) => {
   try {
@@ -2112,11 +2260,11 @@ exports.triggerScheduledAnalysis = onRequest({
     if (timeframe) {
       console.log(`🎯 Specific timeframe requested: ${timeframe}`);
     } else {
-      console.log('🔄 Full analysis mode: all timeframes');
+      console.log('🔄 Auto-select mode: will choose best available timeframe');
     }
     
-    // Check market conditions
-    const shouldRun = await checkMarketHoursAndDailyLimit();
+    // Check market conditions with timeframe awareness
+    const shouldRun = await checkMarketHoursAndDailyLimit(timeframe);
     
     // For manual testing, we can override the daily limit check
     const forceRun = req.query.force === 'true';
@@ -2126,7 +2274,8 @@ exports.triggerScheduledAnalysis = onRequest({
         success: false,
         reason: shouldRun.reason,
         hint: 'Add ?force=true to override daily limit check',
-        timeframe: timeframe || 'all'
+        timeframe: timeframe || 'auto-select',
+        availableTimeframes: shouldRun.availableTimeframes || []
       });
     }
     
@@ -2134,30 +2283,72 @@ exports.triggerScheduledAnalysis = onRequest({
       console.log('🔧 Force mode enabled - overriding checks');
     }
     
-    // Run the full trading tip generation with optional timeframe
-    const result = await executeFullTradingTipGeneration(timeframe);
+    // Run the full trading tip generation with timeframe logic
+    const result = await executeFullTradingTipGeneration(timeframe, shouldRun.availableTimeframes);
     
-    if (result.success && !forceRun) {
-      // Only mark execution if not forced (to avoid marking test runs)
-      await markDailyExecution();
+    if (result.success) {
+      const generatedTimeframe = result.tip.timeframe;
+      
+      if (!forceRun) {
+        // Only mark execution if not forced (to avoid marking test runs)
+        await markDailyExecution(generatedTimeframe);
+        console.log(`✅ Marked ${generatedTimeframe} as completed for today`);
+        
+        // Get updated available timeframes
+        const now = new Date();
+        const easternTime = new Intl.DateTimeFormat('en-US', {
+          timeZone: 'America/New_York',
+          year: 'numeric',
+          month: '2-digit',
+          day: '2-digit'
+        }).formatToParts(now);
+        
+        const etYear = parseInt(easternTime.find(part => part.type === 'year').value);
+        const etMonth = parseInt(easternTime.find(part => part.type === 'month').value) - 1;
+        const etDay = parseInt(easternTime.find(part => part.type === 'day').value);
+        const etDate = new Date(etYear, etMonth, etDay);
+        
+        const remainingTimeframes = await getAvailableTimeframes(etDate);
+        
+        res.json({
+          success: result.success,
+          tip: result.tip,
+          marketCheck: shouldRun,
+          forceRun,
+          timeframe: timeframe || 'auto-selected',
+          timeframeUsed: generatedTimeframe,
+          completedTimeframe: generatedTimeframe,
+          remainingTimeframes: remainingTimeframes,
+          allTimeframesComplete: remainingTimeframes.length === 0
+        });
+      } else {
+        res.json({
+          success: result.success,
+          tip: result.tip,
+          marketCheck: shouldRun,
+          forceRun,
+          timeframe: timeframe || 'auto-selected',
+          timeframeUsed: generatedTimeframe,
+          note: 'Force mode - execution not marked to preserve production state'
+        });
+      }
+    } else {
+      res.json({
+        success: result.success,
+        error: result.error,
+        marketCheck: shouldRun,
+        forceRun,
+        timeframe: timeframe || 'auto-select',
+        availableTimeframes: shouldRun.availableTimeframes || []
+      });
     }
-    
-    res.json({
-      success: result.success,
-      tip: result.tip,
-      error: result.error,
-      marketCheck: shouldRun,
-      forceRun,
-      timeframe: timeframe || 'all',
-      timeframeUsed: result.tip?.timeframe || null
-    });
     
   } catch (error) {
     console.error('❌ Manual trigger error:', error);
     res.status(500).json({
       success: false,
       error: error.message,
-      timeframe: req.query.timeframe || 'all'
+      timeframe: req.query.timeframe || 'auto-select'
     });
   }
 });
@@ -2283,7 +2474,7 @@ const MIN_CRYPTO_SIGNAL_STRENGTH = 1.5;
 exports.scheduledCryptoTipGeneratorEvening = onSchedule({
   schedule: '*/55 18-23 * * 1-5',
   timeZone: 'America/New_York',
-  secrets: [taapiApiKey, openaiApiKey],
+  secrets: [taapiApiKey],
 }, async (context) => {
   try {
     console.log('🌆 Scheduled crypto analysis (evening) starting...');
@@ -2320,7 +2511,7 @@ exports.scheduledCryptoTipGeneratorEvening = onSchedule({
 exports.scheduledCryptoTipGeneratorMorning = onSchedule({
   schedule: '*/55 0-8 * * 1-5',
   timeZone: 'America/New_York',
-  secrets: [taapiApiKey, openaiApiKey],
+  secrets: [taapiApiKey],
 }, async (context) => {
   try {
     console.log('🌅 Scheduled crypto analysis (morning) starting...');
@@ -2357,7 +2548,7 @@ exports.scheduledCryptoTipGeneratorMorning = onSchedule({
 exports.scheduledCryptoTipGeneratorWeekend = onSchedule({
   schedule: '*/55 * * * 0,6',
   timeZone: 'America/New_York',
-  secrets: [taapiApiKey, openaiApiKey],
+  secrets: [taapiApiKey],
 }, async (context) => {
   try {
     console.log('🎉 Scheduled crypto analysis (weekend) starting...');
@@ -2392,7 +2583,7 @@ exports.scheduledCryptoTipGeneratorWeekend = onSchedule({
 
 // Manual crypto analysis trigger
 exports.triggerCryptoAnalysis = onRequest({
-  secrets: [taapiApiKey, openaiApiKey],
+  secrets: [taapiApiKey],
   cors: true,
 }, async (req, res) => {
   try {
@@ -2479,17 +2670,10 @@ async function executeFullCryptoTipGeneration(specificTimeframe = null) {
     
     console.log(`🥇 Best crypto signal: ${bestSignal.pair} (${bestSignal.sentiment}, ${bestSignal.strength.toFixed(2)})`);
     
-    // Generate crypto-themed images
-    const openaiKey = openaiApiKey.value().replace(/^["']|["']$/g, '').trim();
-    const backgroundImageUrl = await generateCryptoBackgroundImage(bestSignal, openaiKey);
-    
-    // Upload images to storage
-    const imageUrls = await uploadImagesToStorage(bestSignal, backgroundImageUrl);
-    
-    // Get crypto info
+    // Get crypto info with proper structure
     const cryptoInfo = getCryptoInfo(bestSignal.pair);
     
-    // Create comprehensive tip data
+    // Create clean crypto tip data (no background generation)
     const tipData = {
       id: `crypto_${Date.now()}`,
       type: 'crypto',
@@ -2505,8 +2689,25 @@ async function executeFullCryptoTipGeneration(specificTimeframe = null) {
       riskReward: bestSignal.riskReward,
       reasoning: bestSignal.reasoning,
       indicators: bestSignal.indicators,
-      backgroundUrl: imageUrls.backgroundUrl,
-      logoUrl: cryptoInfo.logoUrl,
+      
+      // Company/Crypto info (app uses this for 3D token path and sentiment backgrounds)
+      company: {
+        name: cryptoInfo.name,
+        symbol: bestSignal.pair,
+        logoUrl: cryptoInfo.logoUrl,
+        sector: 'Cryptocurrency',
+        business: 'Digital Asset',
+        isCrypto: true
+      },
+      
+      // MINIMAL BACKWARD COMPATIBILITY: Empty placeholders for old app versions
+      images: {
+        latestTradingCard: { 
+          url: 'local_assets', // Placeholder - app ignores this
+          type: 'local_assets' 
+        }
+      },
+      
       timestamp: new Date().toISOString(),
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
       market: 'crypto',
@@ -2519,8 +2720,8 @@ async function executeFullCryptoTipGeneration(specificTimeframe = null) {
     // Update app stats
     await updateAppStats();
     
-    // Send push notification
-    await sendCryptoTipNotification(tipData, cryptoInfo);
+    // Send push notification with proper company structure
+    await sendCryptoTipNotification(tipData, tipData.company);
     
     console.log('✅ Crypto tip generation completed successfully');
     
@@ -2799,67 +3000,8 @@ function generateCryptoAnalysis(symbol, indicators, currentPrice, timeframe) {
 }
 
 // Generate crypto-themed background image
-async function generateCryptoBackgroundImage(analysis, openaiApiKey) {
-  try {
-    console.log('🎨 Generating crypto background image...');
-    
-    const prompt = createCryptoBackgroundPrompt(analysis);
-    
-    const response = await fetch('https://api.openai.com/v1/images/generations', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${openaiApiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: 'dall-e-3',
-        prompt: prompt,
-        n: 1,
-        size: '1024x1024',
-        quality: 'standard',
-        style: 'vivid'
-      })
-    });
-
-    if (!response.ok) {
-      throw new Error(`OpenAI API error: ${response.status}`);
-    }
-
-    const data = await response.json();
-    console.log('✅ Crypto background generated successfully');
-    
-    return data.data[0].url;
-    
-  } catch (error) {
-    console.error('❌ Error generating crypto background:', error);
-    throw error;
-  }
-}
 
 // Create crypto-specific background prompt
-function createCryptoBackgroundPrompt(analysis) {
-  const sentiment = analysis.sentiment;
-  const crypto = analysis.crypto;
-  const strength = Math.abs(analysis.strength);
-  
-  const sentimentColors = {
-    'bullish': 'vibrant green and gold',
-    'bearish': 'deep red and orange',
-    'neutral': 'blue and purple'
-  };
-  
-  const colors = sentimentColors[sentiment] || 'blue and purple';
-  
-  const basePrompt = `Professional cryptocurrency trading card background featuring ${crypto} themed elements. `;
-  
-  if (sentiment === 'bullish') {
-    return basePrompt + `Bullish crypto theme with ${colors} gradients, upward trending charts, rocket ships, bulls, growth arrows, digital currency symbols, blockchain networks, and prosperity symbols. Modern fintech aesthetic with glowing effects, circuit patterns, and success imagery. High-tech cryptocurrency trading environment.`;
-  } else if (sentiment === 'bearish') {
-    return basePrompt + `Bearish crypto theme with ${colors} gradients, downward trending charts, bears, correction arrows, digital currency symbols, blockchain networks, and caution symbols. Modern fintech aesthetic with warning effects, circuit patterns, and market correction imagery. Professional cryptocurrency trading environment.`;
-  } else {
-    return basePrompt + `Neutral crypto theme with ${colors} gradients, sideways trending charts, balanced scales, digital currency symbols, blockchain networks, and stability symbols. Modern fintech aesthetic with balanced effects, circuit patterns, and market equilibrium imagery. Professional cryptocurrency trading environment.`;
-  }
-}
 
 // Check if we should run crypto analysis (when US stock market is closed)
 async function checkCryptoMarketWindow() {
@@ -3004,6 +3146,9 @@ async function sendCryptoTipNotification(tipData, cryptoInfo) {
     const sentimentEmoji = tipData.sentiment === 'bullish' ? '🚀' : tipData.sentiment === 'bearish' ? '📉' : '➡️';
     const body = `${sentimentEmoji} ${tipData.sentiment.toUpperCase()} signal (${Math.abs(tipData.strength).toFixed(1)}) - Entry: $${tipData.entryPrice?.toFixed(6)}`;
     
+    // Generate unique message ID
+    const messageId = `crypto_${tipData.symbol}_${tipData.timeframe}_${Date.now()}`;
+    
     const notificationMessage = {
       notification: {
         title: title,
@@ -3016,37 +3161,73 @@ async function sendCryptoTipNotification(tipData, cryptoInfo) {
         sentiment: tipData.sentiment,
         strength: tipData.strength.toString(),
         timeframe: tipData.timeframe,
+        target_timeframe: tipData.timeframe, // CRITICAL: For deep-linking navigation
         entryPrice: tipData.entryPrice?.toString() || '',
         timestamp: tipData.timestamp,
         tipId: tipData.id,
-        market: 'crypto'
+        market: 'crypto',
+        message_id: messageId,
       },
       android: {
         notification: {
-          icon: 'ic_notification',
-          color: '#00D4AA',
+          icon: 'launcher_icon',
+          color: '#00D4AA', // Crypto brand color
           channelId: 'crypto_tips',
           priority: 'high',
           defaultSound: true,
           defaultVibrateTimings: true,
-          imageUrl: tipData.backgroundUrl
+          defaultLightSettings: true,
+          tag: messageId,
+          notificationCount: 1,
+          clickAction: 'FLUTTER_NOTIFICATION_CLICK',
+        },
+        data: {
+          click_action: 'FLUTTER_NOTIFICATION_CLICK',
+          route: '/trading_tip',
+          target_timeframe: tipData.timeframe,
         }
       },
       apns: {
+        headers: {
+          'apns-priority': '10',
+          'apns-push-type': 'alert',
+          'apns-collapse-id': `crypto_tip_${tipData.symbol}`,
+        },
         payload: {
           aps: {
+            alert: {
+              title: title,
+              body: body,
+            },
             sound: 'default',
             badge: 1,
             category: 'CRYPTO_TIP',
-            'mutable-content': 1
+            'content-available': 1,
+            'mutable-content': 1,
+            'thread-id': `crypto_${tipData.symbol}`,
+          },
+          customData: {
+            type: 'crypto_tip',
+            symbol: tipData.symbol,
+            crypto: tipData.crypto,
+            timeframe: tipData.timeframe,
+            target_timeframe: tipData.timeframe, // CRITICAL: For iOS deep-linking
+            sentiment: tipData.sentiment,
+            messageId: messageId,
           }
-        },
-        fcm_options: {
-          image: tipData.backgroundUrl
         }
       },
-      topic: 'crypto_tips'
+      topic: 'trading_tips' // Use same topic for consistency
     };
+    
+    console.log('📤 Sending crypto notification:', {
+      messageId: messageId,
+      title: title,
+      symbol: tipData.symbol,
+      crypto: tipData.crypto,
+      sentiment: tipData.sentiment,
+      timeframe: tipData.timeframe,
+    });
     
     const response = await admin.messaging().send(notificationMessage);
     console.log('✅ Crypto notification sent:', response);
@@ -3055,23 +3236,45 @@ async function sendCryptoTipNotification(tipData, cryptoInfo) {
     try {
       await admin.firestore().collection('notification_analytics').add({
         event_type: 'crypto_tip_sent',
-        tip_id: tipData.id,
+        message_id: messageId,
         firebase_message_id: response,
+        tip_id: tipData.id,
         symbol: tipData.symbol,
         crypto: tipData.crypto,
         sentiment: tipData.sentiment,
         strength: tipData.strength,
         timeframe: tipData.timeframe,
+        title: title,
+        body: body,
         timestamp: admin.firestore.FieldValue.serverTimestamp(),
-        market: 'crypto'
+        server_timestamp: Date.now(),
+        market: 'crypto',
+        target_topic: 'trading_tips',
+        platform_config: {
+          android_channel: 'crypto_tips',
+          ios_category: 'CRYPTO_TIP',
+          deep_link_enabled: true,
+        }
       });
+      console.log('📊 Crypto notification analytics logged');
     } catch (analyticsError) {
       console.error('⚠️ Failed to log crypto notification analytics:', analyticsError);
     }
     
+    return {
+      success: true,
+      messageId: response,
+      customMessageId: messageId,
+      title: title,
+      body: body
+    };
+    
   } catch (error) {
     console.error('❌ Error sending crypto notification:', error);
-    throw error;
+    return {
+      success: false,
+      error: error.message
+    };
   }
 }
 
@@ -3119,3 +3322,91 @@ function getCryptoName(pair) {
   };
   return cryptoNames[pair] || pair;
 }
+
+// Check timeframe completion status for today (new helper function)
+exports.checkTimeframeStatus = onRequest({
+  cors: true,
+}, async (req, res) => {
+  try {
+    console.log('📊 Checking timeframe completion status...');
+    
+    // Get current Eastern Time
+    const now = new Date();
+    const easternTime = new Intl.DateTimeFormat('en-US', {
+      timeZone: 'America/New_York',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false
+    }).formatToParts(now);
+    
+    const etYear = parseInt(easternTime.find(part => part.type === 'year').value);
+    const etMonth = parseInt(easternTime.find(part => part.type === 'month').value) - 1;
+    const etDay = parseInt(easternTime.find(part => part.type === 'day').value);
+    const etHour = parseInt(easternTime.find(part => part.type === 'hour').value);
+    const etMinute = parseInt(easternTime.find(part => part.type === 'minute').value);
+    
+    const etDateTime = new Date(etYear, etMonth, etDay, etHour, etMinute);
+    const today = etDateTime.toISOString().split('T')[0];
+    const currentTimeStr = `${etHour}:${etMinute.toString().padStart(2, '0')} ET`;
+    
+    // Get completion status for each timeframe
+    const allTimeframes = ['short_term', 'mid_term', 'long_term'];
+    const timeframeStatus = {};
+    
+    for (const timeframe of allTimeframes) {
+      const isCompleted = await checkDailyExecution(etDateTime, timeframe);
+      timeframeStatus[timeframe] = {
+        completed: isCompleted,
+        status: isCompleted ? '✅ Complete' : '⏳ Pending'
+      };
+    }
+    
+    // Get available timeframes
+    const availableTimeframes = await getAvailableTimeframes(etDateTime);
+    const completedTimeframes = allTimeframes.filter(tf => !availableTimeframes.includes(tf));
+    
+    // Get detailed execution record
+    const db = admin.firestore();
+    const executionRef = db.collection('scheduled_executions').doc(today);
+    const doc = await executionRef.get();
+    const executionRecord = doc.exists ? doc.data() : null;
+    
+    // Check market status
+    const marketStatus = await checkMarketHoursAndDailyLimit();
+    
+    res.json({
+      success: true,
+      currentTime: currentTimeStr,
+      date: today,
+      timeframeStatus: timeframeStatus,
+      summary: {
+        totalTimeframes: allTimeframes.length,
+        completed: completedTimeframes.length,
+        remaining: availableTimeframes.length,
+        completedTimeframes: completedTimeframes,
+        availableTimeframes: availableTimeframes,
+        allComplete: availableTimeframes.length === 0
+      },
+      marketStatus: {
+        canRun: marketStatus.canRun,
+        reason: marketStatus.reason,
+        availableForGeneration: marketStatus.availableTimeframes || []
+      },
+      executionRecord: executionRecord,
+      nextAction: availableTimeframes.length > 0 ? 
+        `Generate tip for ${availableTimeframes[0]} timeframe` : 
+        'All timeframes completed for today'
+    });
+    
+  } catch (error) {
+    console.error('❌ Error checking timeframe status:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
