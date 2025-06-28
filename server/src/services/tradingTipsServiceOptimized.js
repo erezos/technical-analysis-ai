@@ -343,6 +343,140 @@ class OptimizedTradingTipsService {
       return null;
     }
   }
+
+  async saveLiveTradingTip(analysis, triggerType = 'live-signal') {
+    try {
+      console.log(`💾 Saving live trading tip for ${analysis.symbol}...`);
+      
+      // Validate tip is still current
+      const currentTime = Date.now();
+      const analysisTime = new Date(analysis.timestamp).getTime();
+      const ageMinutes = (currentTime - analysisTime) / (1000 * 60);
+      
+      if (ageMinutes > 5) {
+        console.log(`⚠️ Analysis too old (${ageMinutes.toFixed(1)} minutes), skipping save`);
+        return false;
+      }
+      
+      // Create enhanced tip data for live signals
+      const tipData = {
+        symbol: analysis.symbol,
+        timeframe: analysis.timeframe,
+        sentiment: analysis.analysis.sentiment,
+        entryPrice: analysis.analysis.entryPrice,
+        stopLoss: analysis.analysis.stopLoss,
+        takeProfit: analysis.analysis.takeProfit,
+        riskRewardRatio: analysis.analysis.riskRewardRatio,
+        strength: analysis.analysis.strength,
+        confidence: analysis.analysis.confidence,
+        reasoning: analysis.analysis.reasoning,
+        indicators: analysis.indicators,
+        
+        // Live signal metadata
+        triggerType: triggerType,
+        isLiveSignal: true,
+        signalTimestamp: new Date().toISOString(),
+        marketConditions: {
+          isMarketHours: this.isMarketHours(),
+          volatility: this.calculateVolatility(analysis),
+          momentum: this.calculateMomentum(analysis)
+        },
+        
+        // Enhanced company info
+        company: this.getCompanyInfo(analysis.symbol),
+        
+        metadata: {
+          generatedAt: new Date().toISOString(),
+          strategy: 'live_real_time_v1',
+          dataAge: ageMinutes,
+          priority: 'high'
+        }
+      };
+      
+      // Save to Firebase with live signal collection
+      const docRef = await this.db.collection('live_trading_tips').add(tipData);
+      console.log(`✅ Live tip saved with ID: ${docRef.id}`);
+      
+      // Also save to regular collection for app compatibility
+      await this.db.collection('trading_tips').add({
+        ...tipData,
+        isLiveSignal: true
+      });
+      
+      return docRef.id;
+      
+    } catch (error) {
+      console.error('❌ Error saving live trading tip:', error);
+      return false;
+    }
+  }
+
+  isMarketHours() {
+    const now = new Date();
+    const utc = new Date(now.getTime() + (now.getTimezoneOffset() * 60000));
+    const est = new Date(utc.getTime() + (-5 * 3600000)); // EST timezone
+    
+    const hour = est.getHours();
+    const day = est.getDay();
+    
+    // Market hours: 9:30 AM - 4:00 PM EST, Monday-Friday
+    const isWeekday = day >= 1 && day <= 5;
+    const isDuringHours = (hour >= 9 && hour < 16) || (hour === 9 && est.getMinutes() >= 30);
+    
+    return isWeekday && isDuringHours;
+  }
+
+  calculateVolatility(analysis) {
+    try {
+      const atr = analysis.indicators.atr?.value;
+      const currentPrice = analysis.currentPrice;
+      
+      if (atr && currentPrice) {
+        return (atr / currentPrice) * 100; // ATR as percentage of price
+      }
+      return 2.0; // Default volatility
+    } catch (error) {
+      return 2.0;
+    }
+  }
+
+  calculateMomentum(analysis) {
+    try {
+      const rsi = analysis.indicators.rsi?.value;
+      const macd = analysis.indicators.macd?.valueMACDHist;
+      
+      let momentum = 'neutral';
+      
+      if (rsi && macd) {
+        if (rsi > 60 && macd > 0) momentum = 'strong_bullish';
+        else if (rsi < 40 && macd < 0) momentum = 'strong_bearish';
+        else if (rsi > 50 && macd > 0) momentum = 'bullish';
+        else if (rsi < 50 && macd < 0) momentum = 'bearish';
+      }
+      
+      return momentum;
+    } catch (error) {
+      return 'neutral';
+    }
+  }
+
+  getCompanyInfo(symbol) {
+    try {
+      const logoUtils = require('../utils/logoUtils');
+      const isCrypto = symbol.includes('/') || symbol.includes('USD');
+      
+      if (isCrypto) {
+        return logoUtils.getCryptoCompanyInfo(symbol);
+      } else {
+        return logoUtils.getStockCompanyInfo(symbol);
+      }
+    } catch (error) {
+      return {
+        name: symbol,
+        logoUrl: 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIHZpZXdCb3g9IjAgMCA0MCA0MCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjQwIiBoZWlnaHQ9IjQwIiByeD0iOCIgZmlsbD0iIzMzNzNkYyIvPgo8dGV4dCB4PSI1IiB5PSIyNSIgZm9udC1mYW1pbHk9IkFyaWFsLCBzYW5zLXNlcmlmIiBmb250LXNpemU9IjE0IiBmb250LXdlaWdodD0iYm9sZCIgZmlsbD0id2hpdGUiPiQkPC90ZXh0Pgo8L3N2Zz4K'
+      };
+    }
+  }
 }
 
 module.exports = new OptimizedTradingTipsService(); 
