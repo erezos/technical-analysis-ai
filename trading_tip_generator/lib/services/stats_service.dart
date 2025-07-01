@@ -79,6 +79,26 @@ class StatsService {
     _hasInitialized = false;
   }
 
+  /// Refresh stats during current session (useful when tips are updated)
+  static Future<void> refreshStats() async {
+    try {
+      print('🔄 Refreshing app statistics...');
+      final docRef = _firestore.collection(_statsCollection).doc(_statsDoc);
+      final doc = await docRef.get();
+      
+      if (doc.exists) {
+        _sessionStats = doc.data()!;
+        print('✅ Stats refreshed: ${_sessionStats!['generatedTips']} tips generated');
+        print('📊 Success Rate: ${_sessionStats!['successRate']}%');
+        print('🤖 AI Accuracy: ${_sessionStats!['aiAccuracy']}%');
+      } else {
+        print('⚠️ No stats document found during refresh');
+      }
+    } catch (e) {
+      print('❌ Error refreshing stats: $e');
+    }
+  }
+
   /// Check if stats have been initialized this session
   static bool get isInitialized => _hasInitialized;
 } 

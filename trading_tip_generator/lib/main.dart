@@ -3,22 +3,22 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
-import 'disclaimer_page.dart';
-import 'providers/trading_tips_provider.dart';
-import 'screens/trading_tip_screen.dart';
-import 'screens/hot_board_screen_enhanced.dart';
-import 'screens/lesson_screen.dart';
-import 'models/trading_tip.dart';
-import 'services/notification_service.dart';
+import 'dart:convert';
+
 import 'services/stats_service.dart';
 import 'services/trading_link_service.dart';
-import 'services/notification_permission_service_fixed.dart';
 import 'services/educational_service.dart';
-import 'widgets/premium_glassmorphism_nav.dart';
+import 'services/notification_service.dart';
+import 'providers/trading_tips_provider.dart';
 import 'widgets/responsive/responsive_layout.dart';
+import 'widgets/premium_fintech_buttons.dart';
+import 'screens/trading_tip_screen.dart';
+import 'screens/lesson_screen.dart';
+import 'disclaimer_page.dart';
+import 'screens/hot_board_screen_enhanced.dart';
+import 'widgets/premium_glassmorphism_nav.dart';
 import 'widgets/education_category_button.dart';
 import 'widgets/enhanced_micro_animations.dart';
-import 'widgets/premium_fintech_buttons.dart';
 import 'widgets/premium_trading_icons.dart';
 import 'widgets/premium_typography.dart';
 import 'utils/trading_background_utils.dart';
@@ -793,7 +793,12 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           mainAxisAlignment: MainAxisAlignment.spaceEvenly,
           children: [
             Expanded(
-              child: _buildStatItem('Tips', '23', Icons.trending_up, const Color(0xFF00D4AA), isCompact),
+              child: Builder(
+                builder: (context) {
+                  final stats = StatsService.getFormattedSessionStats();
+                  return _buildStatItem('Tips', stats['generatedTips']!, Icons.trending_up, const Color(0xFF00D4AA), isCompact);
+                }
+              ),
             ),
             Container(
               width: 1,
@@ -801,7 +806,12 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               color: Colors.grey[600]?.withOpacity(0.5),
             ),
             Expanded(
-              child: _buildStatItem('Success', '98%', Icons.check_circle, const Color(0xFF4CAF50), isCompact),
+              child: Builder(
+                builder: (context) {
+                  final stats = StatsService.getFormattedSessionStats();
+                  return _buildStatItem('Success', stats['successRate']!, Icons.check_circle, const Color(0xFF4CAF50), isCompact);
+                }
+              ),
             ),
             Container(
               width: 1,
@@ -809,7 +819,12 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               color: Colors.grey[600]?.withOpacity(0.5),
             ),
             Expanded(
-              child: _buildStatItem('Accuracy', '97%', Icons.track_changes, const Color(0xFF2196F3), isCompact),
+              child: Builder(
+                builder: (context) {
+                  final stats = StatsService.getFormattedSessionStats();
+                  return _buildStatItem('Accuracy', stats['aiAccuracy']!, Icons.track_changes, const Color(0xFF2196F3), isCompact);
+                }
+              ),
             ),
           ],
         ),
