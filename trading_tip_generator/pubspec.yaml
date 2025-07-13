@@ -16,7 +16,7 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 # https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html
 # In Windows, build-name is used as the major, minor, and patch parts
 # of the product and file versions while build-number is used as the build suffix.
-version: 1.2.1+9
+version: 1.2.5+13
 
 environment:
   sdk: '>=3.2.3 <4.0.0'
@@ -30,19 +30,27 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  cupertino_icons: ^1.0.2
+  flutter_localizations:
+    sdk: flutter
+  intl: ^0.20.2
+  cupertino_icons: ^1.0.8
   firebase_core: ^3.6.0
   cloud_firestore: ^5.4.4
   firebase_storage: ^12.3.4
   firebase_messaging: ^15.1.3
   cached_network_image: ^3.3.1
-  provider: ^6.1.1
+  provider: ^6.1.2
   # New dependencies for v1.1 features
   share_plus: ^7.2.1  # WhatsApp sharing functionality
   permission_handler: ^11.1.0  # Custom notification permission dialog
-  url_launcher: ^6.2.2  # Launch trading platform URLs
-  shared_preferences: ^2.2.2  # Store first-session tracking
-  http: ^1.2.0  # HTTP requests for geolocation
+  url_launcher: ^6.3.1  # Launch trading platform URLs
+  shared_preferences: ^2.3.2  # Store first-session tracking
+  http: ^1.2.2  # HTTP requests for geolocation
+  flutter_local_notifications: ^18.0.1
+  firebase_analytics: ^11.3.3
+  webview_flutter: ^4.13.0
+  # webview_flutter: ^4.13.0  # Removed - replaced with url_launcher for better compatibility
+  # webview_flutter: ^4.7.0  # Removed - causing build issues, using better alternatives
 
 
   # The following adds the Cupertino Icons font to your application.
@@ -77,6 +85,9 @@ flutter:
   # included with your application, so that you can use the icons in
   # the material Icons class.
   uses-material-design: true
+  
+  # Enable internationalization
+  generate: true
 
   # To add assets to your application, add an assets section, like this:
   assets:

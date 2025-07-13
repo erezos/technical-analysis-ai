@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:firebase_analytics/firebase_analytics.dart';
 
 /// Premium fintech button system inspired by top trading apps
 class PremiumFintechButtons {
@@ -21,7 +22,7 @@ class PremiumFintechButtons {
     
     // Responsive sizing - BIGGER button (8% of screen height instead of 7%)
     final buttonHeight = (screenHeight * 0.08).clamp(56.0, 80.0);
-    final fontSize = (screenWidth * 0.04).clamp(16.0, 20.0);
+    final fontSize = (screenWidth * 0.05).clamp(18.0, 24.0);
     final subtitleSize = (screenWidth * 0.025).clamp(12.0, 14.0);
     final iconSize = (fontSize * 1.2).clamp(18.0, 24.0);
     final borderRadius = (buttonHeight * 0.25).clamp(12.0, 18.0);
@@ -35,6 +36,9 @@ class PremiumFintechButtons {
         child: InkWell(
           borderRadius: BorderRadius.circular(borderRadius),
           onTap: isEnabled && !isLoading ? () {
+            // Log event for Copy Traders button click
+            print('📊 [ANALYTICS] Copy Traders button clicked');
+            FirebaseAnalytics.instance.logEvent(name: 'copy_traders_button_click', parameters: {'button_name': 'Copy Traders'});
             HapticFeedback.mediumImpact();
             onPressed();
           } : null,
@@ -93,7 +97,7 @@ class PremiumFintechButtons {
                             style: TextStyle(
                               color: Colors.white,
                               fontSize: fontSize,
-                              fontWeight: FontWeight.w600,
+                              fontWeight: FontWeight.w700,
                               letterSpacing: 0.5,
                             ),
                           ),

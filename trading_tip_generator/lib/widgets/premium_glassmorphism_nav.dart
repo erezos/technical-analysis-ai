@@ -44,111 +44,126 @@ class _PremiumGlassmorphismNavState extends State<PremiumGlassmorphismNav>
 
   @override
   Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final screenWidth = constraints.maxWidth;
-        final screenHeight = MediaQuery.of(context).size.height;
-        final isTablet = screenWidth > 600;
-        final isAndroid = Platform.isAndroid;
-        
-        // Responsive calculations for all devices
-        final navHeight = _calculateNavHeight(screenHeight, isTablet, isAndroid);
-        final horizontalMargin = screenWidth * (isTablet ? 0.08 : 0.04);
-        final bottomMargin = _calculateBottomMargin(screenHeight, isTablet);
-        final cornerRadius = 30.0; // Matches the image design
-        
-        return Container(
-          height: navHeight,
-          margin: EdgeInsets.only(
-            left: horizontalMargin,
-            right: horizontalMargin,
-            bottom: bottomMargin,
-          ),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(cornerRadius),
-            // Premium glassmorphism background matching the image
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [
-                const Color(0xFF0A0A0A).withOpacity(0.95), // Much darker
-                const Color(0xFF1A1A1A).withOpacity(0.9),  // Much darker
-                const Color(0xFF0F0F0F).withOpacity(0.95), // Much darker
+    return SafeArea(
+      top: false,
+      left: false,
+      right: false,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final screenWidth = constraints.maxWidth;
+          final screenHeight = MediaQuery.of(context).size.height;
+          final isTablet = screenWidth > 600;
+          final isAndroid = Platform.isAndroid;
+          
+          // Responsive calculations for all devices
+          final navHeight = _calculateNavHeight(screenHeight, isTablet, isAndroid);
+          final horizontalMargin = screenWidth * (isTablet ? 0.08 : 0.04);
+          final cornerRadius = 30.0; // Matches the image design
+          
+          return Container(
+            height: navHeight,
+            margin: EdgeInsets.only(
+              left: horizontalMargin,
+              right: horizontalMargin,
+              // No manual bottom margin; SafeArea handles it
+            ),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(cornerRadius),
+              // Premium glassmorphism background matching the image
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  const Color(0xFF0A0A0A).withOpacity(0.95), // Much darker
+                  const Color(0xFF1A1A1A).withOpacity(0.9),  // Much darker
+                  const Color(0xFF0F0F0F).withOpacity(0.95), // Much darker
+                ],
+              ),
+              // Subtle border like in the image
+              border: Border.all(
+                color: Colors.white.withOpacity(0.1),
+                width: 1,
+              ),
+              boxShadow: [
+                // Main shadow for depth
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.6),
+                  blurRadius: 30,
+                  offset: const Offset(0, 15),
+                  spreadRadius: 0,
+                ),
+                // Inner glow
+                BoxShadow(
+                  color: Colors.white.withOpacity(0.05),
+                  blurRadius: 20,
+                  offset: const Offset(0, -5),
+                  spreadRadius: 0,
+                ),
               ],
             ),
-            // Subtle border like in the image
-            border: Border.all(
-              color: Colors.white.withOpacity(0.1),
-              width: 1,
-            ),
-            boxShadow: [
-              // Main shadow for depth
-              BoxShadow(
-                color: Colors.black.withOpacity(0.6),
-                blurRadius: 30,
-                offset: const Offset(0, 15),
-                spreadRadius: 0,
-              ),
-              // Inner glow
-              BoxShadow(
-                color: Colors.white.withOpacity(0.05),
-                blurRadius: 20,
-                offset: const Offset(0, -5),
-                spreadRadius: 0,
-              ),
-            ],
-          ),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(cornerRadius),
-            child: BackdropFilter(
-              filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
-              child: Container(
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(cornerRadius),
-                  // Remove any overlay - let the background gradient handle it
-                  color: Colors.transparent,
-                ),
-                child: Row(
-                  children: [
-                    // AI Tips Tab
-                    Expanded(
-                      child: _buildNavigationTab(
-                        index: 0,
-                        label: 'AI Tips',
-                        isSelected: widget.currentIndex == 0,
-                        navHeight: navHeight,
-                        isAndroid: isAndroid,
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(cornerRadius),
+              child: BackdropFilter(
+                filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+                child: Container(
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(cornerRadius),
+                    // Remove any overlay - let the background gradient handle it
+                    color: Colors.transparent,
+                  ),
+                  child: Row(
+                    children: [
+                      // AI Tips Tab
+                      Expanded(
+                        child: _buildNavigationTab(
+                          index: 0,
+                          label: 'AI Tips',
+                          isSelected: widget.currentIndex == 0,
+                          navHeight: navHeight,
+                          isAndroid: isAndroid,
+                        ),
                       ),
-                    ),
-                    
-                    // Hot Board Tab
-                    Expanded(
-                      child: _buildNavigationTab(
-                        index: 1,
-                        label: 'Hot Board',
-                        isSelected: widget.currentIndex == 1,
-                        navHeight: navHeight,
-                        isAndroid: isAndroid,
+                      
+                      // Hot Board Tab
+                      Expanded(
+                        child: _buildNavigationTab(
+                          index: 1,
+                          label: 'Hot Board',
+                          isSelected: widget.currentIndex == 1,
+                          navHeight: navHeight,
+                          isAndroid: isAndroid,
+                        ),
                       ),
-                    ),
-                    
-                    // Education Tab (NEW)
-                    Expanded(
-                      child: _buildNavigationTab(
-                        index: 2,
-                        label: 'Education',
-                        isSelected: widget.currentIndex == 2,
-                        navHeight: navHeight,
-                        isAndroid: isAndroid,
+                      
+                      // Education Tab (NEW)
+                      Expanded(
+                        child: _buildNavigationTab(
+                          index: 2,
+                          label: 'Edu',
+                          isSelected: widget.currentIndex == 2,
+                          navHeight: navHeight,
+                          isAndroid: isAndroid,
+                        ),
                       ),
-                    ),
-                  ],
+                      
+                      // Copy Tab (NEW)
+                      Expanded(
+                        child: _buildNavigationTab(
+                          index: 3,
+                          label: 'Copy',
+                          isSelected: widget.currentIndex == 3,
+                          navHeight: navHeight,
+                          isAndroid: isAndroid,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),
-          ),
-        );
-      },
+          );
+        },
+      ),
     );
   }
 
@@ -255,17 +270,11 @@ class _PremiumGlassmorphismNavState extends State<PremiumGlassmorphismNav>
     }
   }
 
-  double _calculateBottomMargin(double screenHeight, bool isTablet) {
-    // Safe area consideration for all devices
-    final baseMargin = screenHeight * (isTablet ? 0.03 : 0.02);
-    return baseMargin.clamp(15.0, 35.0);
-  }
-
   double _calculateFontSize(double navHeight) {
     // Responsive font size that scales with navigation height
-    // Slightly smaller to accommodate 3 tabs
-    final baseFontSize = navHeight * 0.22;
-    return baseFontSize.clamp(12.0, 18.0);
+    // Increased font size for better readability while maintaining responsiveness
+    final baseFontSize = navHeight * 0.22; // Increased from 0.18 to 0.22
+    return baseFontSize.clamp(12.0, 18.0); // Increased min from 10.0 to 12.0 and max from 16.0 to 18.0
   }
 
   double _calculateTouchTarget(bool isAndroid) {
@@ -275,7 +284,7 @@ class _PremiumGlassmorphismNavState extends State<PremiumGlassmorphismNav>
 
   double _calculateTabPadding(double navHeight) {
     // Responsive padding that maintains proportions
-    // Reduced for 3 tabs
-    return (navHeight * 0.06).clamp(2.0, 8.0);
+    // Reduced padding for 4 tabs
+    return (navHeight * 0.04).clamp(1.0, 6.0);
   }
 } 

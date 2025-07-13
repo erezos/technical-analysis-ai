@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_analytics/firebase_analytics.dart';
 
 class EducationCategoryButton extends StatefulWidget {
   final String title;
@@ -70,6 +71,8 @@ class _EducationCategoryButtonState extends State<EducationCategoryButton>
   void _handleTapUp(TapUpDetails details) {
     setState(() => _isPressed = false);
     _animationController.reverse();
+    // Log event for educational section view
+    FirebaseAnalytics.instance.logEvent(name: 'educational_section_view', parameters: {'section_name': widget.title});
     widget.onTap();
   }
 

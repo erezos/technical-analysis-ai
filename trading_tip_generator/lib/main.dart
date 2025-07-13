@@ -4,11 +4,14 @@ import 'package:provider/provider.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'dart:convert';
+import 'dart:io';
+import 'package:url_launcher/url_launcher.dart';
 
 import 'services/stats_service.dart';
 import 'services/trading_link_service.dart';
 import 'services/educational_service.dart';
 import 'services/notification_service.dart';
+import 'services/notification_permission_service.dart';
 import 'providers/trading_tips_provider.dart';
 import 'widgets/responsive/responsive_layout.dart';
 import 'widgets/premium_fintech_buttons.dart';
@@ -22,6 +25,9 @@ import 'widgets/enhanced_micro_animations.dart';
 import 'widgets/premium_trading_icons.dart';
 import 'widgets/premium_typography.dart';
 import 'utils/trading_background_utils.dart';
+import 'package:firebase_analytics/firebase_analytics.dart';
+import 'screens/copy_screen.dart';
+
 // CRITICAL: Background message handler for iOS and Android notifications
 @pragma('vm:entry-point')
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
@@ -94,6 +100,7 @@ class MyApp extends StatelessWidget {
         // Add routes for notification navigation
         routes: {
           '/hot_board': (context) => const HotBoardScreenEnhanced(),
+          '/copy': (context) => CopyScreen(),
         },
         onGenerateRoute: (settings) {
           // Handle trading tip route with arguments
@@ -196,7 +203,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<TradingTipsProvider>().loadLatestTips();
       
-      // Check if we should show notification permission prompt (40% chance)
+      // Check if we should show notification permission prompt (70% chance)
       _checkNotificationPermission();
     });
   }
@@ -208,7 +215,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     super.dispose();
   }
 
-  /// Check notification permission and show prompt with 40% probability
+  /// Check notification permission and show prompt with 70% probability
   Future<void> _checkNotificationPermission() async {
     try {
       // Wait a bit for the UI to settle after animations
@@ -253,6 +260,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         return const HotBoardScreenEnhanced();
       case 2: // Education
         return _buildEducationScreen(screenSize, isSmallMobile, isTablet);
+      case 3: // Copy
+        return CopyScreen();
       default:
         return _buildTradingTipsScreen(screenSize, isSmallMobile, isTablet);
     }
@@ -765,68 +774,88 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     // Smaller divider height
     final dividerHeight = (screenHeight * 0.025).clamp(16.0, 28.0); // SMALLER divider
     
-    return Container(
-      margin: EdgeInsets.symmetric(
-        horizontal: (screenWidth * 0.04).clamp(16.0, 32.0),
-      ),
-      padding: EdgeInsets.symmetric(
-        horizontal: horizontalPadding,
-        vertical: verticalPadding,
-      ),
-      decoration: BoxDecoration(
-        color: Colors.grey[900]?.withOpacity(0.8),
-        borderRadius: BorderRadius.circular(borderRadius),
-        border: Border.all(
-          color: Colors.grey[700]!.withOpacity(0.3),
-          width: 1,
+    return GestureDetector(
+      onLongPress: () async {
+        // Debug: Test iOS Firebase connectivity on long press
+        print('🔬 [DEBUG] Manual stats refresh triggered');
+        if (Platform.isIOS) {
+          print('🍎 [DEBUG] Testing iOS Firebase connectivity...');
+          final result = await StatsService.testIOSFirebaseConnectivity();
+          if (result) {
+            print('✅ [DEBUG] iOS connectivity test passed - refreshing stats');
+            await StatsService.refreshStats();
+            setState(() {}); // Refresh UI
+          } else {
+            print('❌ [DEBUG] iOS connectivity test failed');
+          }
+        } else {
+          await StatsService.refreshStats();
+          setState(() {}); // Refresh UI
+        }
+      },
+      child: Container(
+        margin: EdgeInsets.symmetric(
+          horizontal: (screenWidth * 0.04).clamp(16.0, 32.0),
         ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.3),
-            blurRadius: 15,
-            offset: const Offset(0, 4),
+        padding: EdgeInsets.symmetric(
+          horizontal: horizontalPadding,
+          vertical: verticalPadding,
+        ),
+        decoration: BoxDecoration(
+          color: Colors.grey[900]?.withOpacity(0.8),
+          borderRadius: BorderRadius.circular(borderRadius),
+          border: Border.all(
+            color: Colors.grey[700]!.withOpacity(0.3),
+            width: 1,
           ),
-        ],
-      ),
-      child: IntrinsicHeight(
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-          children: [
-            Expanded(
-              child: Builder(
-                builder: (context) {
-                  final stats = StatsService.getFormattedSessionStats();
-                  return _buildStatItem('Tips', stats['generatedTips']!, Icons.trending_up, const Color(0xFF00D4AA), isCompact);
-                }
-              ),
-            ),
-            Container(
-              width: 1,
-              height: dividerHeight,
-              color: Colors.grey[600]?.withOpacity(0.5),
-            ),
-            Expanded(
-              child: Builder(
-                builder: (context) {
-                  final stats = StatsService.getFormattedSessionStats();
-                  return _buildStatItem('Success', stats['successRate']!, Icons.check_circle, const Color(0xFF4CAF50), isCompact);
-                }
-              ),
-            ),
-            Container(
-              width: 1,
-              height: dividerHeight,
-              color: Colors.grey[600]?.withOpacity(0.5),
-            ),
-            Expanded(
-              child: Builder(
-                builder: (context) {
-                  final stats = StatsService.getFormattedSessionStats();
-                  return _buildStatItem('Accuracy', stats['aiAccuracy']!, Icons.track_changes, const Color(0xFF2196F3), isCompact);
-                }
-              ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.3),
+              blurRadius: 15,
+              offset: const Offset(0, 4),
             ),
           ],
+        ),
+        child: IntrinsicHeight(
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            children: [
+              Expanded(
+                child: Builder(
+                  builder: (context) {
+                    final stats = StatsService.getFormattedSessionStats();
+                    return _buildStatItem('Tips', stats['generatedTips']!, Icons.trending_up, const Color(0xFF00D4AA), isCompact);
+                  }
+                ),
+              ),
+              Container(
+                width: 1,
+                height: dividerHeight,
+                color: Colors.grey[600]?.withOpacity(0.5),
+              ),
+              Expanded(
+                child: Builder(
+                  builder: (context) {
+                    final stats = StatsService.getFormattedSessionStats();
+                    return _buildStatItem('Success', stats['successRate']!, Icons.check_circle, const Color(0xFF4CAF50), isCompact);
+                  }
+                ),
+              ),
+              Container(
+                width: 1,
+                height: dividerHeight,
+                color: Colors.grey[600]?.withOpacity(0.5),
+              ),
+              Expanded(
+                child: Builder(
+                  builder: (context) {
+                    final stats = StatsService.getFormattedSessionStats();
+                    return _buildStatItem('Accuracy', stats['aiAccuracy']!, Icons.track_changes, const Color(0xFF2196F3), isCompact);
+                  }
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -1200,7 +1229,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     return Container(
       width: double.infinity,
       child: PremiumFintechButtons.primaryAction(
-        text: 'Start Trading',
+        text: 'Copy Traders',
         subtitle: 'Turn insights into profits',
         icon: Icons.rocket_launch,
         context: context,
@@ -1212,43 +1241,197 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   }
 
   void _openTradingPlatform() async {
+    final url = TradingLinkService.getTradingUrl();
+    print('📊 [ANALYTICS] Opening trading platform with URL: $url');
+    final uri = Uri.parse(url);
     try {
-      // Show loading snackbar
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text('🚀 Opening trading platform...'),
-          backgroundColor: const Color(0xFFFFD700),
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-          duration: const Duration(seconds: 2),
-        ),
+      await launchUrl(
+        uri,
+        mode: Platform.isIOS ? LaunchMode.platformDefault : LaunchMode.externalApplication,
       );
-      
-      // Launch trading platform URL from Firebase
-      final success = await TradingLinkService.launchTradingPlatform();
-      
-      if (!success) {
-        // Show error if launch failed
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: const Text('❌ Unable to open trading platform'),
-            backgroundColor: Colors.red,
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-          ),
-        );
-      }
+      // Log successful launch event
+      print('📊 [ANALYTICS] Copy Traders URL launched successfully: $url');
+      FirebaseAnalytics.instance.logEvent(
+        name: 'copy_traders_url_launched',
+        parameters: {'url': url},
+      );
     } catch (e) {
-      print('Error opening trading platform: $e');
+      // Log failed launch event
+      print('📊 [ANALYTICS] Copy Traders URL launch failed: $url - Error: $e');
+      FirebaseAnalytics.instance.logEvent(
+        name: 'copy_traders_url_launch_failed',
+        parameters: {'url': url, 'error': e.toString()},
+      );
+      _showTradingPlatformErrorDialog();
+    }
+  }
+
+  void _showTradingPlatformErrorDialog() {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('📱 Open Trading Platform'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Choose how you\'d like to access the trading platform:',
+                style: TextStyle(fontWeight: FontWeight.w500),
+              ),
+              const SizedBox(height: 16),
+              _buildDialogOption(
+                icon: Icons.phone_android,
+                title: 'Download App',
+                subtitle: 'Get the ZuluTrade mobile app',
+                onTap: () {
+                  Navigator.of(context).pop();
+                  _launchAppStore();
+                },
+              ),
+              const SizedBox(height: 12),
+              _buildDialogOption(
+                icon: Icons.web,
+                title: 'Open in Browser',
+                subtitle: 'Visit ZuluTrade website',
+                onTap: () {
+                  Navigator.of(context).pop();
+                  _launchWebsite();
+                },
+              ),
+              const SizedBox(height: 12),
+              _buildDialogOption(
+                icon: Icons.copy,
+                title: 'Copy Link',
+                subtitle: 'Copy URL to clipboard',
+                onTap: () {
+                  Navigator.of(context).pop();
+                  _copyTradingLink();
+                },
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Cancel'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildDialogOption({
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(8),
+      child: Padding(
+        padding: const EdgeInsets.all(8.0),
+        child: Row(
+          children: [
+            Icon(icon, color: const Color(0xFFFFD700), size: 24),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w600,
+                      fontSize: 16,
+                    ),
+                  ),
+                  Text(
+                    subtitle,
+                    style: TextStyle(
+                      color: Colors.grey[600],
+                      fontSize: 14,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const Icon(Icons.arrow_forward_ios, size: 16, color: Colors.grey),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _launchAppStore() async {
+    try {
+      // Try to open the app directly first with affiliate deep link
+      final appUrl = Uri.parse('zulutrade://');
+      if (await canLaunchUrl(appUrl)) {
+        await launchUrl(appUrl);
+        return;
+      }
+
+      // If app not installed, open app store with affiliate tracking
+      final storeUrl = Platform.isIOS
+          ? Uri.parse('https://apps.apple.com/app/zulutrade/id584428905?pt=2915819&ct=affiliate&mt=8')
+          : Uri.parse('https://play.google.com/store/apps/details?id=com.zulutrade.android&referrer=utm_source%3D2915819%26utm_medium%3Daffiliate%26utm_campaign%3Dapp_download');
+      
+      await launchUrl(storeUrl, mode: LaunchMode.externalApplication);
+    } catch (e) {
+      print('Error launching app store: $e');
+      _showErrorSnackBar('Could not open app store');
+    }
+  }
+
+  Future<void> _launchWebsite() async {
+    try {
+      // Use affiliate website URL instead of generic one
+      final url = Uri.parse('https://www.zulutrade.com/?ref=2915819&utm_source=2915819&utm_medium=affiliate&utm_campaign=website_fallback');
+      await launchUrl(url, mode: LaunchMode.externalApplication);
+    } catch (e) {
+      print('Error launching website: $e');
+      _showErrorSnackBar('Could not open website');
+    }
+  }
+
+  Future<void> _copyTradingLink() async {
+    try {
+      final url = TradingLinkService.getTradingUrl();
+      // Copy to clipboard (you'll need to add clipboard package if not already added)
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: const Text('❌ Error opening trading platform'),
-          backgroundColor: Colors.red,
+          content: Text('Trading link copied: $url'),
+          backgroundColor: Colors.green,
           behavior: SnackBarBehavior.floating,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          action: SnackBarAction(
+            label: 'Open',
+            onPressed: () async {
+              final uri = Uri.parse(url);
+              await launchUrl(uri, mode: LaunchMode.externalApplication);
+            },
+          ),
         ),
       );
+    } catch (e) {
+      print('Error copying link: $e');
+      _showErrorSnackBar('Could not copy link');
     }
+  }
+
+  void _showErrorSnackBar(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('❌ $message'),
+        backgroundColor: Colors.red,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+      ),
+    );
   }
 
   Widget _buildFooter() {
@@ -1278,6 +1461,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   }
 
   void _navigateToTip(BuildContext context, TradingTipsProvider provider, String timeframe) async {
+    // Log event for page view
+    FirebaseAnalytics.instance.logEvent(name: '${timeframe}_page_view', parameters: {'page_name': timeframe});
     final tip = await provider.getTipForTimeframe(timeframe);
     if (tip != null) {
       Navigator.push(

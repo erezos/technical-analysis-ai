@@ -2,7 +2,8 @@ import 'dart:io';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart' as ph;
-import 'notification_permission_service_fixed.dart';
+import 'notification_permission_service.dart';
+import 'package:firebase_analytics/firebase_analytics.dart';
 
 /// Background message handler - MUST be top-level function
 @pragma('vm:entry-point')
@@ -236,6 +237,8 @@ class NotificationService {
   /// Show in-app notification when app is in foreground
   static void _showInAppNotification(RemoteMessage message) {
     if (_navigatorKey?.currentContext != null) {
+      // Log event when the in-app notification is shown
+      FirebaseAnalytics.instance.logEvent(name: 'in_app_notification_shown', parameters: {'notification_title': message.notification?.title ?? 'New Trading Signal'});
       final context = _navigatorKey!.currentContext!;
       
       ScaffoldMessenger.of(context).showSnackBar(
