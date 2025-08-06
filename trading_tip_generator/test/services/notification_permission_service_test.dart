@@ -39,19 +39,17 @@ void main() {
       );
     } catch (e) {
       // Firebase might already be initialized, ignore error
-      print('Firebase already initialized or failed to initialize: $e');
+      // Ignoring initialization error for test purposes
     }
   });
 
   group('NotificationPermissionService iOS Tests', () {
     late MockFirebaseMessaging mockMessaging;
     late MockNotificationSettings mockSettings;
-    late MockSharedPreferences mockPrefs;
 
     setUp(() {
       mockMessaging = MockFirebaseMessaging();
       mockSettings = MockNotificationSettings();
-      mockPrefs = MockSharedPreferences();
       
       // Reset SharedPreferences for each test
       SharedPreferences.setMockInitialValues({});

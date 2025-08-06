@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import '../utils/app_logger.dart';
 
 class EducationalLesson {
   final String id;
@@ -78,7 +79,7 @@ class EducationalService {
   /// Initialize and fetch all educational content on app startup
   static Future<void> initializeEducationalContent() async {
     try {
-      print('📚 Initializing educational content...');
+      AppLogger.info('📚 Initializing educational content...');
       
       // Fetch metadata first
       await _fetchMetadata();
@@ -86,12 +87,12 @@ class EducationalService {
       // Fetch all lessons
       await _fetchAllLessons();
       
-      print('✅ Educational content initialized successfully');
-      print('📊 Total lessons: ${_cachedLessons?.length ?? 0}');
-      print('📂 Categories: ${_cachedMetadata?.categories.join(", ") ?? "None"}');
+      AppLogger.info('✅ Educational content initialized successfully');
+      AppLogger.info('📊 Total lessons: ${_cachedLessons?.length ?? 0}');
+      AppLogger.info('📂 Categories: ${_cachedMetadata?.categories.join(", ") ?? "None"}');
       
     } catch (e) {
-      print('❌ Error initializing educational content: $e');
+      AppLogger.error('❌ Error initializing educational content: $e');
       // Initialize with empty data to prevent crashes
       _cachedLessons = [];
       _cachedMetadata = EducationalMetadata(
@@ -163,7 +164,7 @@ class EducationalService {
   /// Private method to fetch all lessons
   static Future<void> _fetchAllLessons() async {
     try {
-      print('📖 Fetching educational lessons from Firebase...');
+      AppLogger.info('📖 Fetching educational lessons from Firebase...');
       
       final querySnapshot = await _firestore
           .collection(_collection)
@@ -183,10 +184,10 @@ class EducationalService {
 
       _lastFetchTime = DateTime.now();
       
-      print('✅ Fetched ${_cachedLessons!.length} lessons');
+      AppLogger.info('✅ Fetched ${_cachedLessons!.length} lessons');
       
     } catch (e) {
-      print('❌ Error fetching lessons: $e');
+      AppLogger.error('❌ Error fetching lessons: $e');
       _cachedLessons = [];
     }
   }
@@ -194,7 +195,7 @@ class EducationalService {
   /// Private method to fetch metadata
   static Future<void> _fetchMetadata() async {
     try {
-      print('📊 Fetching educational metadata...');
+      AppLogger.info('📊 Fetching educational metadata...');
       
       final doc = await _firestore
           .collection(_collection)
@@ -203,9 +204,9 @@ class EducationalService {
 
       if (doc.exists) {
         _cachedMetadata = EducationalMetadata.fromFirestore(doc);
-        print('✅ Metadata fetched: ${_cachedMetadata!.totalLessons} lessons available');
+        AppLogger.info('✅ Metadata fetched: ${_cachedMetadata!.totalLessons} lessons available');
       } else {
-        print('⚠️ No metadata found, using defaults');
+        AppLogger.warning('⚠️ No metadata found, using defaults');
         _cachedMetadata = EducationalMetadata(
           totalLessons: 0,
           lastUpdated: DateTime.now(),
@@ -216,7 +217,7 @@ class EducationalService {
       }
       
     } catch (e) {
-      print('❌ Error fetching metadata: $e');
+      AppLogger.error('❌ Error fetching metadata: $e');
       _cachedMetadata = EducationalMetadata(
         totalLessons: 0,
         lastUpdated: DateTime.now(),

@@ -3,12 +3,20 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
-import 'dart:convert';
+import 'package:google_mobile_ads/google_mobile_ads.dart';
+
+import 'dart:io';
+import 'package:url_launcher/url_launcher.dart';
+import 'utils/app_logger.dart';
+import 'utils/color_utils.dart';
 
 import 'services/stats_service.dart';
 import 'services/trading_link_service.dart';
 import 'services/educational_service.dart';
 import 'services/notification_service.dart';
+import 'services/notification_permission_service.dart';
+import 'services/ad_service.dart';
+import 'services/ad_helper.dart';
 import 'providers/trading_tips_provider.dart';
 import 'widgets/responsive/responsive_layout.dart';
 import 'widgets/premium_fintech_buttons.dart';
@@ -21,24 +29,27 @@ import 'widgets/education_category_button.dart';
 import 'widgets/enhanced_micro_animations.dart';
 import 'widgets/premium_trading_icons.dart';
 import 'widgets/premium_typography.dart';
-import 'utils/trading_background_utils.dart';
+
+import 'package:firebase_analytics/firebase_analytics.dart';
+import 'screens/calendar_screen.dart';
+
 // CRITICAL: Background message handler for iOS and Android notifications
 @pragma('vm:entry-point')
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   // Initialize Firebase for background context
   await Firebase.initializeApp();
   
-  print('🔔 Background message received: ${message.messageId}');
-  print('📱 Message data: ${message.data}');
-  print('📢 Notification: ${message.notification?.title} - ${message.notification?.body}');
+  AppLogger.notification('Background message received: ${message.messageId}');
+  AppLogger.notification('Message data: ${message.data}');
+  AppLogger.notification('Notification: ${message.notification?.title} - ${message.notification?.body}');
   
   // Handle the background message based on type
   if (message.data['type'] == 'trading_tip') {
-    print('📈 Trading tip received in background: ${message.data['symbol']}');
-    print('⏰ Timeframe: ${message.data['timeframe']}');
-    print('🎯 Target timeframe: ${message.data['target_timeframe']}');
+    AppLogger.trading('Trading tip received in background: ${message.data['symbol']}');
+    AppLogger.trading('Timeframe: ${message.data['timeframe']}');
+    AppLogger.trading('Target timeframe: ${message.data['target_timeframe']}');
   } else if (message.data['type'] == 'crypto_tip') {
-    print('₿ Crypto tip received in background: ${message.data['symbol']}');
+    AppLogger.trading('Crypto tip received in background: ${message.data['symbol']}');
   }
   
   // Optional: Show local notification for background messages
@@ -60,6 +71,9 @@ void main() async {
   
   // Initialize educational content (NEW)
   await EducationalService.initializeEducationalContent();
+  
+  // Initialize AdMob
+  await AdService.initialize();
   
   // Enable edge-to-edge display - best practice for Android full screen
   SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
@@ -94,6 +108,7 @@ class MyApp extends StatelessWidget {
         // Add routes for notification navigation
         routes: {
           '/hot_board': (context) => const HotBoardScreenEnhanced(),
+          '/calendar': (context) => const CalendarScreen(),
         },
         onGenerateRoute: (settings) {
           // Handle trading tip route with arguments
@@ -105,7 +120,7 @@ class MyApp extends StatelessWidget {
               final symbol = args['symbol'] ?? 'Unknown';
               final timeframe = args['target_timeframe'] ?? args['timeframe'] ?? 'short_term';
               
-              print('🧭 Route handling: Navigating to $symbol ($timeframe)');
+              AppLogger.info('🧭 Route handling: Navigating to $symbol ($timeframe)');
               
               // Instead of creating a placeholder tip, navigate to HomeScreen and then fetch the specific timeframe tip
               return MaterialPageRoute(
@@ -169,6 +184,11 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   late Animation<double> _fadeAnimation;
   late Animation<double> _scaleAnimation;
   int _currentIndex = 0;
+  
+  // Education banner ad management
+  BannerAd? _educationBannerAd;
+  bool _isEducationBannerAdLoaded = false;
+  bool _isLoadingEducationBannerAd = false;
 
   @override
   void initState() {
@@ -196,7 +216,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<TradingTipsProvider>().loadLatestTips();
       
-      // Check if we should show notification permission prompt (40% chance)
+      // Check if we should show notification permission prompt (70% chance)
       _checkNotificationPermission();
     });
   }
@@ -205,10 +225,11 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   void dispose() {
     _fadeController.dispose();
     _scaleController.dispose();
+    _educationBannerAd?.dispose();
     super.dispose();
   }
 
-  /// Check notification permission and show prompt with 40% probability
+  /// Check notification permission and show prompt with 70% probability
   Future<void> _checkNotificationPermission() async {
     try {
       // Wait a bit for the UI to settle after animations
@@ -219,7 +240,54 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         await NotificationPermissionService.showPermissionDialog(context);
       }
     } catch (e) {
-      print('❌ Error checking notification permission: $e');
+      AppLogger.error('❌ Error checking notification permission: $e');
+    }
+  }
+
+  /// Load adaptive banner ad for education screen
+  Future<void> _loadEducationBannerAd() async {
+    if (!mounted) return;
+    
+    if (_isLoadingEducationBannerAd || _isEducationBannerAdLoaded) return;
+    
+    setState(() {
+      _isLoadingEducationBannerAd = true;
+    });
+    
+    final screenWidth = MediaQuery.of(context).size.width.truncate();
+    
+    try {
+      _educationBannerAd = await AdService.createAdaptiveBanner(
+        width: screenWidth,
+        adUnitId: AdHelper.educationBannerAdUnitId,
+        onAdLoaded: (ad) {
+          if (mounted) {
+            setState(() {
+              _educationBannerAd = ad;
+              _isEducationBannerAdLoaded = true;
+              _isLoadingEducationBannerAd = false;
+            });
+            AppLogger.info('💰 Education banner ad loaded successfully');
+          }
+        },
+        onAdFailedToLoad: (ad, error) {
+          AppLogger.error('❌ Failed to load education banner ad: $error');
+          if (mounted) {
+            setState(() {
+              _isEducationBannerAdLoaded = false;
+              _isLoadingEducationBannerAd = false;
+            });
+          }
+        },
+      );
+      
+    } catch (e) {
+      AppLogger.error('💥 Exception loading education banner ad: $e');
+      if (mounted) {
+        setState(() {
+          _isLoadingEducationBannerAd = false;
+        });
+      }
     }
   }
 
@@ -240,7 +308,16 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       body: _buildCurrentScreen(screenSize, isSmallMobile, isTablet),
       bottomNavigationBar: PremiumGlassmorphismNav(
         currentIndex: _currentIndex,
-        onTap: (index) => setState(() => _currentIndex = index),
+        onTap: (index) {
+          setState(() => _currentIndex = index);
+          // Load education banner ad when education tab is selected
+          if (index == 2 && !_isEducationBannerAdLoaded && !_isLoadingEducationBannerAd) {
+            // Use addPostFrameCallback to ensure MediaQuery is available
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              _loadEducationBannerAd();
+            });
+          }
+        },
       ),
     );
   }
@@ -253,6 +330,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         return const HotBoardScreenEnhanced();
       case 2: // Education
         return _buildEducationScreen(screenSize, isSmallMobile, isTablet);
+      case 3: // Calendar
+        return const CalendarScreen();
       default:
         return _buildTradingTipsScreen(screenSize, isSmallMobile, isTablet);
     }
@@ -272,9 +351,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
             colors: [
-              Colors.black.withOpacity( 0.85),
-              Colors.black.withOpacity( 0.9),
-              Colors.black.withOpacity( 0.95),
+              ColorUtils.withOpacity(Colors.black, 0.85),
+              ColorUtils.withOpacity(Colors.black, 0.9),
+              ColorUtils.withOpacity(Colors.black, 0.95),
             ],
           ),
         ),
@@ -325,6 +404,26 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               ),
               const SizedBox(height: 16),
               _buildEducationCategoriesMobile(),
+              const SizedBox(height: 16),
+              // Education Banner Ad
+              if (_isEducationBannerAdLoaded && _educationBannerAd != null)
+                Container(
+                  decoration: const BoxDecoration(
+                    color: Color(0xFF1A1A2E),
+                    borderRadius: BorderRadius.all(Radius.circular(12)),
+                    border: Border.fromBorderSide(
+                      BorderSide(
+                        color: Color(0xFF2A2A3E),
+                        width: 1,
+                      ),
+                    ),
+                  ),
+                  child: SizedBox(
+                    width: _educationBannerAd!.size.width.toDouble(),
+                    height: _educationBannerAd!.size.height.toDouble(),
+                    child: AdWidget(ad: _educationBannerAd!),
+                  ),
+                ),
             ],
           ),
         ),
@@ -354,6 +453,26 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               ),
               const SizedBox(height: 20),
               _buildEducationCategoriesTablet(),
+              const SizedBox(height: 20),
+              // Education Banner Ad
+              if (_isEducationBannerAdLoaded && _educationBannerAd != null)
+                Container(
+                  decoration: const BoxDecoration(
+                    color: Color(0xFF1A1A2E),
+                    borderRadius: BorderRadius.all(Radius.circular(12)),
+                    border: Border.fromBorderSide(
+                      BorderSide(
+                        color: Color(0xFF2A2A3E),
+                        width: 1,
+                      ),
+                    ),
+                  ),
+                  child: SizedBox(
+                    width: _educationBannerAd!.size.width.toDouble(),
+                    height: _educationBannerAd!.size.height.toDouble(),
+                    child: AdWidget(ad: _educationBannerAd!),
+                  ),
+                ),
             ],
           ),
         ),
@@ -375,7 +494,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         ),
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: const Color(0xFF00D4AA).withOpacity( 0.2),
+          color: ColorUtils.withOpacity(const Color(0xFF00D4AA), 0.2),
           width: 1,
         ),
       ),
@@ -389,7 +508,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                 Container(
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF00D4AA).withOpacity( 0.2),
+                    color: ColorUtils.withOpacity(const Color(0xFF00D4AA), 0.2),
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: const Icon(
@@ -427,10 +546,10 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: const Color(0xFF00D4AA).withOpacity( 0.1),
+                color: ColorUtils.withOpacity(const Color(0xFF00D4AA), 0.1),
                 borderRadius: BorderRadius.circular(8),
                 border: Border.all(
-                  color: Colors.white.withOpacity( 0.3),
+                  color: ColorUtils.withOpacity(Colors.white, 0.3),
                   width: 1,
                 ),
               ),
@@ -485,7 +604,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         ),
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
-          color: Colors.white.withOpacity( 0.1),
+          color: ColorUtils.withOpacity(Colors.white, 0.1),
           width: 1,
         ),
       ),
@@ -633,7 +752,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   Widget _buildResponsiveContent(BoxConstraints constraints, bool isSmallMobile, bool isTablet) {
     // Calculate responsive dimensions based on available space
     final availableHeight = constraints.maxHeight;
-    final availableWidth = constraints.maxWidth;
     
     // Responsive button height based on available space
     final buttonHeight = _calculateButtonHeight(availableHeight, isSmallMobile, isTablet);
@@ -717,13 +835,12 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
   Widget _buildHeader() {
     final screenSize = MediaQuery.sizeOf(context);
-    final screenWidth = screenSize.width;
     final screenHeight = screenSize.height;
     
     // Responsive breakpoints based on industry standards
-    final isCompact = screenWidth < 600; // Phone
-    final isMedium = screenWidth >= 600 && screenWidth < 900; // Tablet
-    final isExpanded = screenWidth >= 900; // Desktop
+    // final isCompact = screenWidth < 600; // Phone
+    // final isMedium = screenWidth >= 600 && screenWidth < 900; // Tablet
+    // final isExpanded = screenWidth >= 900; // Desktop
     
     // BIGGER icon sizing (12% of screen height instead of 10%)
     final iconSize = (screenHeight * 0.12).clamp(90.0, 140.0);
@@ -754,8 +871,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     
     // Responsive breakpoints
     final isCompact = screenWidth < 600; // Phone
-    final isMedium = screenWidth >= 600 && screenWidth < 900; // Tablet
-    final isExpanded = screenWidth >= 900; // Desktop
+    // final isMedium = screenWidth >= 600 && screenWidth < 900; // Tablet
+    // final isExpanded = screenWidth >= 900; // Desktop
     
     // Better padding for smaller height (3-4% of screen width)
     final horizontalPadding = (screenWidth * 0.035).clamp(20.0, 40.0);
@@ -765,68 +882,85 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     // Smaller divider height
     final dividerHeight = (screenHeight * 0.025).clamp(16.0, 28.0); // SMALLER divider
     
-    return Container(
-      margin: EdgeInsets.symmetric(
-        horizontal: (screenWidth * 0.04).clamp(16.0, 32.0),
-      ),
-      padding: EdgeInsets.symmetric(
-        horizontal: horizontalPadding,
-        vertical: verticalPadding,
-      ),
-      decoration: BoxDecoration(
-        color: Colors.grey[900]?.withOpacity(0.8),
-        borderRadius: BorderRadius.circular(borderRadius),
-        border: Border.all(
-          color: Colors.grey[700]!.withOpacity(0.3),
-          width: 1,
+    return GestureDetector(
+      onLongPress: () async {
+        // Debug: Test iOS Firebase connectivity on long press
+        AppLogger.info('🔬 [DEBUG] Manual stats refresh triggered');
+        if (Platform.isIOS) {
+          AppLogger.info('🍎 [DEBUG] Refreshing iOS stats...');
+          await StatsService.refreshStats();
+          setState(() {}); // Refresh UI
+          AppLogger.info('✅ [DEBUG] iOS stats refresh completed');
+        } else {
+          AppLogger.info('🤖 [DEBUG] Refreshing Android stats...');
+          await StatsService.refreshStats();
+          setState(() {}); // Refresh UI
+          AppLogger.info('✅ [DEBUG] Android stats refresh completed');
+        }
+      },
+      child: Container(
+        margin: EdgeInsets.symmetric(
+          horizontal: (screenWidth * 0.04).clamp(16.0, 32.0),
         ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.3),
-            blurRadius: 15,
-            offset: const Offset(0, 4),
+        padding: EdgeInsets.symmetric(
+          horizontal: horizontalPadding,
+          vertical: verticalPadding,
+        ),
+        decoration: BoxDecoration(
+          color: ColorUtils.withOpacity(Colors.grey[900]!, 0.8),
+          borderRadius: BorderRadius.circular(borderRadius),
+          border: Border.all(
+            color: ColorUtils.withOpacity(Colors.grey[700]!, 0.3),
+            width: 1,
           ),
-        ],
-      ),
-      child: IntrinsicHeight(
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-          children: [
-            Expanded(
-              child: Builder(
-                builder: (context) {
-                  final stats = StatsService.getFormattedSessionStats();
-                  return _buildStatItem('Tips', stats['generatedTips']!, Icons.trending_up, const Color(0xFF00D4AA), isCompact);
-                }
-              ),
-            ),
-            Container(
-              width: 1,
-              height: dividerHeight,
-              color: Colors.grey[600]?.withOpacity(0.5),
-            ),
-            Expanded(
-              child: Builder(
-                builder: (context) {
-                  final stats = StatsService.getFormattedSessionStats();
-                  return _buildStatItem('Success', stats['successRate']!, Icons.check_circle, const Color(0xFF4CAF50), isCompact);
-                }
-              ),
-            ),
-            Container(
-              width: 1,
-              height: dividerHeight,
-              color: Colors.grey[600]?.withOpacity(0.5),
-            ),
-            Expanded(
-              child: Builder(
-                builder: (context) {
-                  final stats = StatsService.getFormattedSessionStats();
-                  return _buildStatItem('Accuracy', stats['aiAccuracy']!, Icons.track_changes, const Color(0xFF2196F3), isCompact);
-                }
-              ),
+          boxShadow: [
+            BoxShadow(
+              color: ColorUtils.withOpacity(Colors.black, 0.3),
+              blurRadius: 15,
+              offset: const Offset(0, 4),
             ),
           ],
+        ),
+        child: IntrinsicHeight(
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            children: [
+              Expanded(
+                child: Builder(
+                  builder: (context) {
+                    final stats = StatsService.getFormattedSessionStats();
+                    return _buildStatItem('Tips', stats['generatedTips']!, Icons.trending_up, const Color(0xFF00D4AA), isCompact);
+                  }
+                ),
+              ),
+              Container(
+                width: 1,
+                height: dividerHeight,
+                color: ColorUtils.withOpacity(Colors.grey[600]!, 0.5),
+              ),
+              Expanded(
+                child: Builder(
+                  builder: (context) {
+                    final stats = StatsService.getFormattedSessionStats();
+                    return _buildStatItem('Success', stats['successRate']!, Icons.check_circle, const Color(0xFF4CAF50), isCompact);
+                  }
+                ),
+              ),
+              Container(
+                width: 1,
+                height: dividerHeight,
+                color: ColorUtils.withOpacity(Colors.grey[600]!, 0.5),
+              ),
+              Expanded(
+                child: Builder(
+                  builder: (context) {
+                    final stats = StatsService.getFormattedSessionStats();
+                    return _buildStatItem('Accuracy', stats['aiAccuracy']!, Icons.track_changes, const Color(0xFF2196F3), isCompact);
+                  }
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -838,8 +972,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     final screenHeight = screenSize.height;
     
     // Responsive breakpoints
-    final isMedium = screenWidth >= 600 && screenWidth < 900; // Tablet
-    final isExpanded = screenWidth >= 900; // Desktop
+    // final isMedium = screenWidth >= 600 && screenWidth < 900; // Tablet
+    // final isExpanded = screenWidth >= 900; // Desktop
     
     // Good icon sizing (6-7% of screen width)
     final iconSize = (screenWidth * 0.065).clamp(36.0, 54.0);
@@ -866,7 +1000,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           height: iconSize,
           padding: EdgeInsets.all(iconPadding),
           decoration: BoxDecoration(
-            color: color.withOpacity( 0.15),
+            color: ColorUtils.withOpacity(color, 0.15),
             borderRadius: BorderRadius.circular(borderRadius),
           ),
           child: Center(
@@ -1090,16 +1224,16 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                   ),
                   decoration: BoxDecoration(
                     gradient: LinearGradient(
-                      colors: gradient.colors.map((c) => c.withOpacity(0.1)).toList(),
+                      colors: gradient.colors.map((c) => ColorUtils.withOpacity(c, 0.1)).toList(),
                     ),
                     borderRadius: BorderRadius.circular(16),
                     border: Border.all(
-                      color: gradient.colors.first.withOpacity(0.3),
+                      color: ColorUtils.withOpacity(gradient.colors.first, 0.3),
                       width: 1,
                     ),
                     boxShadow: [
                       BoxShadow(
-                        color: gradient.colors.first.withOpacity(0.2),
+                        color: ColorUtils.withOpacity(gradient.colors.first, 0.2),
                         blurRadius: 8,
                         offset: const Offset(0, 4),
                       ),
@@ -1197,14 +1331,16 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   }
 
   Widget _buildTradingActionButton() {
-    return Container(
+    return SizedBox(
       width: double.infinity,
       child: PremiumFintechButtons.primaryAction(
-        text: 'Start Trading',
+        text: 'Copy Traders',
         subtitle: 'Turn insights into profits',
         icon: Icons.rocket_launch,
         context: context,
         onPressed: () async {
+          print('🔘 [BUTTON PRESSED] Copy Traders button pressed!');
+          AppLogger.info('🔘 [DEBUG] Copy Traders button pressed!');
           _openTradingPlatform();
         },
       ),
@@ -1212,43 +1348,465 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   }
 
   void _openTradingPlatform() async {
-    try {
-      // Show loading snackbar
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text('🚀 Opening trading platform...'),
-          backgroundColor: const Color(0xFFFFD700),
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-          duration: const Duration(seconds: 2),
-        ),
-      );
+    print('🔧 [METHOD CALLED] _openTradingPlatform() method called');
+    
+    // Debug platform detection
+    print('🔧 [PLATFORM DEBUG] Platform.isIOS: ${Platform.isIOS}');
+    print('🔧 [PLATFORM DEBUG] Platform.isAndroid: ${Platform.isAndroid}');
+    
+    // Check TradingLinkService status
+    AppLogger.info('🔧 [SERVICE DEBUG] TradingLinkService Status:');
+    AppLogger.info('   Is Initialized: ${TradingLinkService.isInitialized}');
+    AppLogger.info('   Detected Country: ${TradingLinkService.detectedCountryCode}');
+    AppLogger.info('   Country Name: ${TradingLinkService.detectedCountryName}');
+    
+        // Platform-specific handling
+    if (Platform.isIOS) {
+      print('🍎 [iOS FLOW] iOS flow triggered!');
+      AppLogger.info('🍎 [iOS FLOW] Using OneLink URL from Firebase Remote Config...');
       
-      // Launch trading platform URL from Firebase
-      final success = await TradingLinkService.launchTradingPlatform();
+      // iOS: Use the same OneLink approach as Android (which works)
+      final url = TradingLinkService.getTradingUrl();
       
-      if (!success) {
-        // Show error if launch failed
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: const Text('❌ Unable to open trading platform'),
-            backgroundColor: Colors.red,
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-          ),
+      AppLogger.info('🤖 [iOS FLOW] Using OneLink URL: $url');
+      
+      // Enhanced URL logging and validation
+      AppLogger.info('🔗 [URL DEBUG] Copy Traders button clicked');
+      AppLogger.info('   Generated URL: $url');
+      AppLogger.info('   URL Length: ${url.length}');
+      AppLogger.info('   URL Contains onelink: ${url.contains('onelink')}');
+      AppLogger.info('   URL Contains zulutrade: ${url.contains('zulutrade')}');
+      AppLogger.info('   Platform: ${Platform.isIOS ? 'iOS' : 'Android'}');
+      
+      // Validate URL format
+      try {
+        final uri = Uri.parse(url);
+        AppLogger.info('   URI Host: ${uri.host}');
+        AppLogger.info('   URI Scheme: ${uri.scheme}');
+        AppLogger.info('   URI Query: ${uri.query}');
+        AppLogger.info('   URI Valid: true');
+      } catch (uriError) {
+        AppLogger.error('   ❌ URI Parse Error: $uriError');
+        FirebaseAnalytics.instance.logEvent(
+          name: 'copy_traders_invalid_url',
+          parameters: {
+            'url': url,
+            'uri_error': uriError.toString(),
+            'platform': Platform.isIOS ? 'iOS' : 'Android',
+          },
         );
+        return;
       }
+      
+      AppLogger.info('📊 [ANALYTICS] Opening trading platform with URL: $url');
+      
+      // 📊 Track Copy Traders button click with detailed attribution including URL and country
+      final clickData = {
+        'url': url,
+        'platform': Platform.isIOS ? 'iOS' : 'Android',
+        'timestamp': DateTime.now().toIso8601String(),
+        'user_session': 'session_${DateTime.now().millisecondsSinceEpoch}',
+        'referral_id': '2915819',
+        'source': 'mobile_app',
+        'campaign': 'copy_traders_button',
+        'country_code': TradingLinkService.detectedCountryCode ?? 'unknown',
+        'country_name': TradingLinkService.detectedCountryName ?? 'unknown',
+        'trading_platform': _extractTradingPlatform(url),
+        'url_length': url.length.toString(),
+        'is_initialized': TradingLinkService.isInitialized.toString(),
+      };
+      
+      FirebaseAnalytics.instance.logEvent(
+        name: 'copy_traders_button_click',
+        parameters: clickData,
+      );
+      
+      // Also log a separate event for URL tracking
+      FirebaseAnalytics.instance.logEvent(
+        name: 'trading_platform_url_used',
+        parameters: {
+          'url': url,
+          'country_code': TradingLinkService.detectedCountryCode ?? 'unknown',
+          'country_name': TradingLinkService.detectedCountryName ?? 'unknown',
+          'trading_platform': _extractTradingPlatform(url),
+          'platform': Platform.isIOS ? 'iOS' : 'Android',
+        },
+      );
+      
+      // Also log to console for immediate monitoring
+      AppLogger.info('📊 [AFFILIATE TRACKING] Click Data:');
+      clickData.forEach((key, value) => AppLogger.info('   $key: $value'));
+      
+      try {
+        final uri = Uri.parse(url);
+        
+        // iOS - use the same approach as Android (which works)
+        await launchUrl(uri, mode: LaunchMode.externalApplication);
+        AppLogger.info('📊 [ANALYTICS] Copy Traders URL launched successfully: $url');
+        FirebaseAnalytics.instance.logEvent(
+          name: 'copy_traders_url_launched',
+          parameters: {'url': url, 'method': 'ios_standard'},
+        );
+      } catch (e) {
+        // Enhanced error logging with more details
+        final errorDetails = {
+          'error_type': e.runtimeType.toString(),
+          'error_message': e.toString(),
+          'url': url,
+          'platform': Platform.isIOS ? 'iOS' : 'Android',
+          'timestamp': DateTime.now().toIso8601String(),
+        };
+        
+        AppLogger.error('❌ [DETAILED ERROR] Copy Traders URL launch failed:');
+        AppLogger.error('   URL: $url');
+        AppLogger.error('   Error Type: ${e.runtimeType}');
+        AppLogger.error('   Error Message: $e');
+        AppLogger.error('   Platform: ${Platform.isIOS ? 'iOS' : 'Android'}');
+        AppLogger.error('   Timestamp: ${DateTime.now().toIso8601String()}');
+        
+        // Log failed launch event with detailed error info
+        FirebaseAnalytics.instance.logEvent(
+          name: 'copy_traders_url_launch_failed',
+          parameters: {
+            'url': url,
+            'error_type': e.runtimeType.toString(),
+            'error_message': e.toString(),
+            'platform': Platform.isIOS ? 'iOS' : 'Android',
+            'method': 'detailed_error',
+          },
+        );
+        
+        // Also log a custom error event for easier tracking
+        FirebaseAnalytics.instance.logEvent(
+          name: 'copy_traders_error_detailed',
+          parameters: errorDetails,
+        );
+        
+        // Show user-friendly dialog with multiple options
+        _showTradingPlatformErrorDialog();
+      }
+    } else {
+      print('🤖 [ANDROID FLOW] Android flow triggered!');
+      // Android: Use the original OneLink URL logic
+      final url = TradingLinkService.getTradingUrl();
+      
+      AppLogger.info('🤖 [ANDROID FLOW] Using OneLink URL: $url');
+      
+      // Enhanced URL logging and validation
+      AppLogger.info('🔗 [URL DEBUG] Copy Traders button clicked');
+      AppLogger.info('   Generated URL: $url');
+      AppLogger.info('   URL Length: ${url.length}');
+      AppLogger.info('   URL Contains onelink: ${url.contains('onelink')}');
+      AppLogger.info('   URL Contains zulutrade: ${url.contains('zulutrade')}');
+      AppLogger.info('   Platform: ${Platform.isIOS ? 'iOS' : 'Android'}');
+      
+      // Validate URL format
+      try {
+        final uri = Uri.parse(url);
+        AppLogger.info('   URI Host: ${uri.host}');
+        AppLogger.info('   URI Scheme: ${uri.scheme}');
+        AppLogger.info('   URI Query: ${uri.query}');
+        AppLogger.info('   URI Valid: true');
+      } catch (uriError) {
+        AppLogger.error('   ❌ URI Parse Error: $uriError');
+        FirebaseAnalytics.instance.logEvent(
+          name: 'copy_traders_invalid_url',
+          parameters: {
+            'url': url,
+            'uri_error': uriError.toString(),
+            'platform': Platform.isIOS ? 'iOS' : 'Android',
+          },
+        );
+        return;
+      }
+      
+      AppLogger.info('📊 [ANALYTICS] Opening trading platform with URL: $url');
+      
+      // 📊 Track Copy Traders button click with detailed attribution including URL and country
+      final clickData = {
+        'url': url,
+        'platform': Platform.isIOS ? 'iOS' : 'Android',
+        'timestamp': DateTime.now().toIso8601String(),
+        'user_session': 'session_${DateTime.now().millisecondsSinceEpoch}',
+        'referral_id': '2915819',
+        'source': 'mobile_app',
+        'campaign': 'copy_traders_button',
+        'country_code': TradingLinkService.detectedCountryCode ?? 'unknown',
+        'country_name': TradingLinkService.detectedCountryName ?? 'unknown',
+        'trading_platform': _extractTradingPlatform(url),
+        'url_length': url.length.toString(),
+        'is_initialized': TradingLinkService.isInitialized.toString(),
+      };
+      
+      FirebaseAnalytics.instance.logEvent(
+        name: 'copy_traders_button_click',
+        parameters: clickData,
+      );
+      
+      // Also log a separate event for URL tracking
+      FirebaseAnalytics.instance.logEvent(
+        name: 'trading_platform_url_used',
+        parameters: {
+          'url': url,
+          'country_code': TradingLinkService.detectedCountryCode ?? 'unknown',
+          'country_name': TradingLinkService.detectedCountryName ?? 'unknown',
+          'trading_platform': _extractTradingPlatform(url),
+          'platform': Platform.isIOS ? 'iOS' : 'Android',
+        },
+      );
+      
+      // Also log to console for immediate monitoring
+      AppLogger.info('📊 [AFFILIATE TRACKING] Click Data:');
+      clickData.forEach((key, value) => AppLogger.info('   $key: $value'));
+      
+      try {
+        final uri = Uri.parse(url);
+        
+        // Android - standard method works well
+        await launchUrl(uri, mode: LaunchMode.externalApplication);
+        AppLogger.info('📊 [ANALYTICS] Copy Traders URL launched successfully: $url');
+        FirebaseAnalytics.instance.logEvent(
+          name: 'copy_traders_url_launched',
+          parameters: {'url': url, 'method': 'android_standard'},
+        );
+      } catch (e) {
+        // Enhanced error logging with more details
+        final errorDetails = {
+          'error_type': e.runtimeType.toString(),
+          'error_message': e.toString(),
+          'url': url,
+          'platform': Platform.isIOS ? 'iOS' : 'Android',
+          'timestamp': DateTime.now().toIso8601String(),
+        };
+        
+        AppLogger.error('❌ [DETAILED ERROR] Copy Traders URL launch failed:');
+        AppLogger.error('   URL: $url');
+        AppLogger.error('   Error Type: ${e.runtimeType}');
+        AppLogger.error('   Error Message: $e');
+        AppLogger.error('   Platform: ${Platform.isIOS ? 'iOS' : 'Android'}');
+        AppLogger.error('   Timestamp: ${DateTime.now().toIso8601String()}');
+        
+        // Log failed launch event with detailed error info
+        FirebaseAnalytics.instance.logEvent(
+          name: 'copy_traders_url_launch_failed',
+          parameters: {
+            'url': url,
+            'error_type': e.runtimeType.toString(),
+            'error_message': e.toString(),
+            'platform': Platform.isIOS ? 'iOS' : 'Android',
+            'method': 'detailed_error',
+          },
+        );
+        
+        // Also log a custom error event for easier tracking
+        FirebaseAnalytics.instance.logEvent(
+          name: 'copy_traders_error_detailed',
+          parameters: errorDetails,
+        );
+        
+        // Show user-friendly dialog with multiple options
+        _showTradingPlatformErrorDialog();
+      }
+    }
+  }
+
+  void _showTradingPlatformErrorDialog() {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('📱 Open Trading Platform'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Choose how you\'d like to access the trading platform:',
+                style: TextStyle(fontWeight: FontWeight.w500),
+              ),
+              const SizedBox(height: 16),
+              _buildDialogOption(
+                icon: Icons.phone_android,
+                title: 'Download App',
+                subtitle: 'Get the ZuluTrade mobile app',
+                onTap: () {
+                  Navigator.of(context).pop();
+                  _launchAppStore();
+                },
+              ),
+              const SizedBox(height: 12),
+              _buildDialogOption(
+                icon: Icons.web,
+                title: 'Open in Browser',
+                subtitle: 'Visit ZuluTrade website',
+                onTap: () {
+                  Navigator.of(context).pop();
+                  _launchWebsite();
+                },
+              ),
+              const SizedBox(height: 12),
+              _buildDialogOption(
+                icon: Icons.copy,
+                title: 'Copy Link',
+                subtitle: 'Copy URL to clipboard',
+                onTap: () {
+                  Navigator.of(context).pop();
+                  _copyTradingLink();
+                },
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Cancel'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildDialogOption({
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(8),
+      child: Padding(
+        padding: const EdgeInsets.all(8.0),
+        child: Row(
+          children: [
+            Icon(icon, color: const Color(0xFFFFD700), size: 24),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w600,
+                      fontSize: 16,
+                    ),
+                  ),
+                  Text(
+                    subtitle,
+                    style: TextStyle(
+                      color: Colors.grey[600],
+                      fontSize: 14,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const Icon(Icons.arrow_forward_ios, size: 16, color: Colors.grey),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _launchAppStore() async {
+    try {
+      // Try to open the app directly first with affiliate deep link
+      final appUrl = Uri.parse('zulutrade://');
+      if (await canLaunchUrl(appUrl)) {
+        await launchUrl(appUrl);
+        return;
+      }
+
+      // If app not installed, open app store with affiliate tracking
+      final storeUrl = Platform.isIOS
+          ? Uri.parse('https://apps.apple.com/app/zulutrade/id584428905?pt=2915819&ct=affiliate&mt=8')
+          : Uri.parse('https://play.google.com/store/apps/details?id=com.zulutrade.android&referrer=utm_source%3D2915819%26utm_medium%3Daffiliate%26utm_campaign%3Dapp_download');
+      
+      await launchUrl(storeUrl, mode: LaunchMode.externalApplication);
+      
+      // Log successful app store launch
+      FirebaseAnalytics.instance.logEvent(
+        name: 'copy_traders_app_store_launched',
+        parameters: {
+          'platform': Platform.isIOS ? 'iOS' : 'Android',
+          'store_url': storeUrl.toString(),
+        },
+      );
     } catch (e) {
-      print('Error opening trading platform: $e');
+      AppLogger.error('Error launching app store: $e');
+      _showErrorSnackBar('Could not open app store');
+    }
+  }
+
+  Future<void> _launchWebsite() async {
+    try {
+      // Use simple affiliate website URL instead of complex OneLink
+      final url = Uri.parse('https://www.zulutrade.com/?ref=2915819&utm_source=2915819&utm_medium=affiliate&utm_campaign=website_fallback');
+      await launchUrl(url, mode: LaunchMode.externalApplication);
+      
+      // Log successful website launch
+      FirebaseAnalytics.instance.logEvent(
+        name: 'copy_traders_website_launched',
+        parameters: {
+          'platform': Platform.isIOS ? 'iOS' : 'Android',
+          'website_url': url.toString(),
+        },
+      );
+    } catch (e) {
+      AppLogger.error('Error launching website: $e');
+      _showErrorSnackBar('Could not open website');
+    }
+  }
+
+  Future<void> _copyTradingLink() async {
+    try {
+      // Use simple URL instead of complex OneLink for better compatibility
+      const url = 'https://www.zulutrade.com/?ref=2915819&utm_source=2915819&utm_medium=affiliate&utm_campaign=copy_link';
+      
+      // Copy to clipboard
+      await Clipboard.setData(const ClipboardData(text: url));
+      
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: const Text('❌ Error opening trading platform'),
-          backgroundColor: Colors.red,
+          content: const Text('Trading link copied to clipboard!'),
+          backgroundColor: Colors.green,
           behavior: SnackBarBehavior.floating,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          action: SnackBarAction(
+            label: 'Open',
+            onPressed: () async {
+              final uri = Uri.parse(url);
+              await launchUrl(uri, mode: LaunchMode.externalApplication);
+            },
+          ),
         ),
       );
+      
+      // Log successful copy
+      FirebaseAnalytics.instance.logEvent(
+        name: 'copy_traders_link_copied',
+        parameters: {
+          'platform': Platform.isIOS ? 'iOS' : 'Android',
+          'copied_url': url,
+        },
+      );
+    } catch (e) {
+      AppLogger.error('Error copying link: $e');
+      _showErrorSnackBar('Could not copy link');
     }
+  }
+
+  void _showErrorSnackBar(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('❌ $message'),
+        backgroundColor: Colors.red,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+      ),
+    );
   }
 
   Widget _buildFooter() {
@@ -1278,10 +1836,13 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   }
 
   void _navigateToTip(BuildContext context, TradingTipsProvider provider, String timeframe) async {
+    // Log event for page view
+    final navigatorContext = context;
+    FirebaseAnalytics.instance.logEvent(name: '${timeframe}_page_view', parameters: {'page_name': timeframe});
     final tip = await provider.getTipForTimeframe(timeframe);
-    if (tip != null) {
+    if (tip != null && mounted) {
       Navigator.push(
-        context,
+        navigatorContext,
         PageRouteBuilder(
           pageBuilder: (context, animation, secondaryAnimation) => TradingTipScreen(tip: tip),
           transitionsBuilder: (context, animation, secondaryAnimation, child) {
@@ -1297,8 +1858,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           transitionDuration: const Duration(milliseconds: 400),
         ),
       );
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
+    } else if (mounted) {
+      ScaffoldMessenger.of(navigatorContext).showSnackBar(
         SnackBar(
           content: Text('No $timeframe tip available'),
           backgroundColor: Colors.orange,
@@ -1307,6 +1868,21 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         ),
       );
     }
+  }
+
+  /// Extract trading platform name from URL for analytics
+  String _extractTradingPlatform(String url) {
+    if (url.contains('zulutrade.com')) return 'ZuluTrade';
+    if (url.contains('trading212.com')) return 'Trading212';
+    if (url.contains('questrade.com')) return 'Questrade';
+    if (url.contains('ig.com')) return 'IG';
+    if (url.contains('robinhood.com')) return 'Robinhood';
+    if (url.contains('etoro.com')) return 'eToro';
+    if (url.contains('interactivebrokers.com')) return 'Interactive Brokers';
+    if (url.contains('tdameritrade.com')) return 'TD Ameritrade';
+    if (url.contains('fidelity.com')) return 'Fidelity';
+    if (url.contains('schwab.com')) return 'Charles Schwab';
+    return 'Unknown';
   }
 }
 
@@ -1338,6 +1914,7 @@ class _NotificationTipNavigatorState extends State<_NotificationTipNavigator> {
     try {
       // Get the trading tips provider
       final provider = context.read<TradingTipsProvider>();
+      final navigatorContext = context;
       
       // Load latest tips if not already loaded
       await provider.loadLatestTips();
@@ -1347,7 +1924,7 @@ class _NotificationTipNavigatorState extends State<_NotificationTipNavigator> {
       
       if (tip != null && mounted) {
         // Navigate to the tip screen
-        Navigator.of(context).pushReplacement(
+        Navigator.of(navigatorContext).pushReplacement(
           PageRouteBuilder(
             pageBuilder: (context, animation, secondaryAnimation) => TradingTipScreen(tip: tip),
             transitionsBuilder: (context, animation, secondaryAnimation, child) {
@@ -1382,7 +1959,7 @@ class _NotificationTipNavigatorState extends State<_NotificationTipNavigator> {
         }
       }
     } catch (e) {
-      print('❌ Error navigating to specific tip: $e');
+      AppLogger.error('❌ Error navigating to specific tip: $e');
       if (mounted) {
         // Navigate to home screen on error
         Navigator.of(context).pushReplacement(
@@ -1410,9 +1987,9 @@ class _NotificationTipNavigatorState extends State<_NotificationTipNavigator> {
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
               colors: [
-                Colors.black.withOpacity( 0.85),
-                Colors.black.withOpacity( 0.9),
-                Colors.black.withOpacity( 0.95),
+                ColorUtils.withOpacity(Colors.black, 0.85),
+                ColorUtils.withOpacity(Colors.black, 0.9),
+                ColorUtils.withOpacity(Colors.black, 0.95),
               ],
             ),
           ),

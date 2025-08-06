@@ -1,9 +1,17 @@
 <?xml version="1.0" encoding="utf-8"?>
 <network-security-config>
+    <!-- Firebase and Google Services -->
     <domain-config cleartextTrafficPermitted="false">
         <domain includeSubdomains="true">storage.googleapis.com</domain>
         <domain includeSubdomains="true">firestore.googleapis.com</domain>
         <domain includeSubdomains="true">fcm.googleapis.com</domain>
+        <domain includeSubdomains="true">firebase.googleapis.com</domain>
+        <domain includeSubdomains="true">googleapis.com</domain>
+        <domain includeSubdomains="true">gstatic.com</domain>
+    </domain-config>
+    
+    <!-- API Services -->
+    <domain-config cleartextTrafficPermitted="false">
         <domain includeSubdomains="true">api.openai.com</domain>
         <domain includeSubdomains="true">api.taapi.io</domain>
     </domain-config>

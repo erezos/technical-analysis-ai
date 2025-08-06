@@ -1,6 +1,5 @@
-import 'dart:convert';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import '../utils/app_logger.dart';
 
 class StatsService {
   static const String _statsCollection = 'app_stats';
@@ -17,22 +16,22 @@ class StatsService {
     if (_hasInitialized) return; // Already initialized this session
     
     try {
-      print('📊 Fetching app statistics for session...');
+      AppLogger.info('📊 Initializing stats service...');
       final docRef = _firestore.collection(_statsCollection).doc(_statsDoc);
       final doc = await docRef.get();
       
       if (doc.exists) {
         _sessionStats = doc.data()!;
         _hasInitialized = true;
-        print('✅ Session stats loaded: ${_sessionStats!['generatedTips']} tips generated');
+        AppLogger.info('✅ Session stats loaded: ${_sessionStats!['generatedTips']} tips generated');
       } else {
         // Use fallback stats if document doesn't exist
         _sessionStats = _getFallbackStats();
         _hasInitialized = true;
-        print('⚠️ Using fallback stats for session');
+        AppLogger.warning('⚠️ Using fallback stats for session');
       }
     } catch (e) {
-      print('❌ Error fetching session stats: $e');
+      AppLogger.error('❌ Error initializing stats service: $e');
       // Use fallback stats on error
       _sessionStats = _getFallbackStats();
       _hasInitialized = true;
@@ -82,20 +81,20 @@ class StatsService {
   /// Refresh stats during current session (useful when tips are updated)
   static Future<void> refreshStats() async {
     try {
-      print('🔄 Refreshing app statistics...');
+      AppLogger.info('🔄 Refreshing app statistics...');
       final docRef = _firestore.collection(_statsCollection).doc(_statsDoc);
       final doc = await docRef.get();
       
       if (doc.exists) {
         _sessionStats = doc.data()!;
-        print('✅ Stats refreshed: ${_sessionStats!['generatedTips']} tips generated');
-        print('📊 Success Rate: ${_sessionStats!['successRate']}%');
-        print('🤖 AI Accuracy: ${_sessionStats!['aiAccuracy']}%');
+        AppLogger.info('✅ Stats refreshed: ${_sessionStats!['generatedTips']} tips generated');
+        AppLogger.info('📊 Success Rate: ${_sessionStats!['successRate']}%');
+        AppLogger.info('🤖 AI Accuracy: ${_sessionStats!['aiAccuracy']}%');
       } else {
-        print('⚠️ No stats document found during refresh');
+        AppLogger.warning('⚠️ No stats document found during refresh');
       }
     } catch (e) {
-      print('❌ Error refreshing stats: $e');
+      AppLogger.error('❌ Error refreshing stats: $e');
     }
   }
 

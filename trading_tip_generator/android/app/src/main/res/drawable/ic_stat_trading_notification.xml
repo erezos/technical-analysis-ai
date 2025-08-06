@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    
+    <!-- Modern trading notification icon with rocket and chart -->
+    
+    <!-- Background circle for better visibility -->
+    <path
+        android:fillColor="#FF00D4AA"
+        android:pathData="M12,12 m-11,0 a11,11 0 1,0 22,0 a11,11 0 1,0 -22,0"/>
+    
+    <!-- Rocket body (simplified for notification clarity) -->
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M12,3 L10,7 L14,7 Z"/>
+    
+    <!-- Rocket tip -->
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M11,3 L13,3 L12,1 Z"/>
+    
+    <!-- Rocket fins -->
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M9,6 L7,8 L9,10 L10,8 Z"/>
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M15,6 L17,8 L15,10 L14,8 Z"/>
+    
+    <!-- Rocket flame -->
+    <path
+        android:fillColor="#FFFFD700"
+        android:pathData="M11,7 L10,9 L12,9 L11,7 Z"/>
+    
+    <!-- Trading chart line (simplified) -->
+    <path
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="1.5"
+        android:pathData="M6,17 L8,15 L10,16 L12,14 L14,15 L16,13 L18,14"/>
+    
+    <!-- Dollar sign (simplified) -->
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M20,5 L20,7 L19,7 L19,8 L20,8 L20,9 L19,9 L19,10 L20,10 L20,12 L19,12 L19,11 L18,11 L18,10 L19,10 L19,9 L18,9 L18,8 L19,8 L19,7 L18,7 L18,5 Z"/>
+    
+    <!-- Sparkles for effect -->
+    <path
+        android:fillColor="#FFFFD700"
+        android:pathData="M5,5 m-0.4,0 a0.4,0.4 0 1,0 0.8,0 a0.4,0.4 0 1,0 -0.8,0"/>
+    <path
+        android:fillColor="#FFFFD700"
+        android:pathData="M19,19 m-0.4,0 a0.4,0.4 0 1,0 0.8,0 a0.4,0.4 0 1,0 -0.8,0"/>
+</vector> 

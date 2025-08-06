@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../models/hot_board_models.dart';
 import '../services/hot_board_service.dart';
-import '../utils/trading_colors.dart';
 import '../utils/responsive_utils.dart';
+import '../utils/color_utils.dart';
 
 class HotBoardScreen extends StatefulWidget {
   const HotBoardScreen({Key? key}) : super(key: key);
@@ -105,10 +105,6 @@ class _HotBoardScreenState extends State<HotBoardScreen>
 
   @override
   Widget build(BuildContext context) {
-    final isTablet = ResponsiveUtils.isTablet(context);
-    final isSmallMobile = ResponsiveUtils.isSmallMobile(context);
-    final isHighContrast = ResponsiveUtils.isHighContrast(context);
-
     return Scaffold(
       backgroundColor: Theme.of(context).colorScheme.surface,
       appBar: AppBar(
@@ -329,10 +325,10 @@ class _HotBoardScreenState extends State<HotBoardScreen>
     return Container(
       padding: EdgeInsets.all(isSmallMobile ? 8 : (isTablet ? 12 : 10)),
       decoration: BoxDecoration(
-        color: isStale ? Colors.orange.withOpacity(0.1) : Colors.green.withOpacity(0.1),
+        color: isStale ? ColorUtils.withOpacity(Colors.orange, 0.1) : ColorUtils.withOpacity(Colors.green, 0.1),
         borderRadius: BorderRadius.circular(8),
         border: Border.all(
-          color: isStale ? Colors.orange.withOpacity(0.3) : Colors.green.withOpacity(0.3),
+          color: isStale ? ColorUtils.withOpacity(Colors.orange, 0.3) : ColorUtils.withOpacity(Colors.green, 0.3),
         ),
       ),
       child: Row(
@@ -418,7 +414,7 @@ class _HotBoardScreenState extends State<HotBoardScreen>
             child: Container(
               padding: const EdgeInsets.all(24),
               decoration: BoxDecoration(
-                color: Colors.grey.withOpacity(0.1),
+                color: ColorUtils.withOpacity(Colors.grey, 0.1),
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Center(
@@ -480,20 +476,20 @@ class _HotBoardScreenState extends State<HotBoardScreen>
       decoration: BoxDecoration(
         gradient: LinearGradient(
           colors: [
-            cardColor.withOpacity(0.1),
-            cardColor.withOpacity(0.05),
+            ColorUtils.withOpacity(cardColor, 0.1),
+            ColorUtils.withOpacity(cardColor, 0.05),
           ],
           begin: Alignment.centerLeft,
           end: Alignment.centerRight,
         ),
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
-          color: cardColor.withOpacity(0.2),
+          color: ColorUtils.withOpacity(cardColor, 0.2),
           width: 1,
         ),
         boxShadow: [
           BoxShadow(
-            color: cardColor.withOpacity(0.1),
+            color: ColorUtils.withOpacity(cardColor, 0.1),
             blurRadius: 8,
             offset: const Offset(0, 2),
           ),
@@ -529,7 +525,7 @@ class _HotBoardScreenState extends State<HotBoardScreen>
                             shape: BoxShape.circle,
                             boxShadow: [
                               BoxShadow(
-                                color: cardColor.withOpacity(0.3 * value),
+                                color: ColorUtils.withOpacity(cardColor, 0.3 * value),
                                 blurRadius: 6 * value,
                                 spreadRadius: 1 * value,
                               ),
@@ -636,7 +632,7 @@ class _HotBoardScreenState extends State<HotBoardScreen>
                               borderRadius: BorderRadius.circular(6),
                               boxShadow: [
                                 BoxShadow(
-                                  color: cardColor.withOpacity(0.3),
+                                  color: ColorUtils.withOpacity(cardColor, 0.3),
                                   blurRadius: 4,
                                   spreadRadius: 1,
                                 ),

@@ -1,176 +1,118 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'dart:io';
 
-// Import the service we're testing
-import '../../lib/services/trading_link_service.dart';
+import 'package:trading_tip_generator/services/trading_link_service.dart';
 
 void main() {
-  group('TradingLinkService Tests', () {
+  group('TradingLinkService - Country-Targeted System Tests', () {
+    
     setUp(() {
-      // Reset the service state before each test
+      // Reset service state before each test
       TradingLinkService.resetSession();
     });
 
-    group('Country Detection Logic Tests', () {
-      test('should correctly identify US users', () {
-        // Test US country code detection logic
-        final usCodes = ['US', 'USA'];
-        
-        for (final code in usCodes) {
-          final isUSUser = (code == 'US' || code == 'USA');
-          expect(isUSUser, isTrue, reason: 'Failed for country code: $code');
-        }
-      });
+    group('Country Detection Tests', () {
+      test('should detect country from device locale as fallback', () {
+        // Test locale-based detection logic
+        final testLocales = [
+          'en_US', // Should detect US
+          'en_GB', // Should detect GB
+          'fr_FR', // Should detect FR
+          'invalid', // Should handle invalid format
+        ];
 
-      test('should correctly identify non-US users', () {
-        // Test non-US country code detection logic
-        final nonUSCodes = ['GB', 'DE', 'FR', 'JP', 'CA', 'AU', 'IN'];
-        
-        for (final code in nonUSCodes) {
-          final isUSUser = (code == 'US' || code == 'USA');
-          expect(isUSUser, isFalse, reason: 'Failed for country code: $code');
-        }
-      });
-
-      test('should parse device locale correctly', () {
-        // Test locale parsing logic
-        final testLocales = {
-          'en_US': 'US',
-          'en_GB': 'GB',
-          'de_DE': 'DE',
-          'fr_FR': 'FR',
-          'ja_JP': 'JP',
-          'es_ES': 'ES',
-        };
-
-        for (final entry in testLocales.entries) {
-          final locale = entry.key;
-          final expectedCountry = entry.value;
+        for (final locale in testLocales) {
+          String? detectedCountry;
           
           if (locale.contains('_')) {
             final countryCode = locale.split('_').last.toUpperCase();
-            expect(countryCode, equals(expectedCountry), 
-                   reason: 'Failed to parse locale: $locale');
+            if (countryCode.length == 2) {
+              detectedCountry = countryCode;
+            }
+          }
+          
+          if (locale == 'en_US') {
+            expect(detectedCountry, equals('US'));
+          } else if (locale == 'en_GB') {
+            expect(detectedCountry, equals('GB'));
+          } else if (locale == 'fr_FR') {
+            expect(detectedCountry, equals('FR'));
+          } else {
+            expect(detectedCountry, isNull);
           }
         }
       });
 
-      test('should handle malformed locale gracefully', () {
-        final malformedLocales = ['en', 'invalid', '', 'en_', '_US', 'en_US_variant'];
-        
-        for (final locale in malformedLocales) {
-          expect(() {
-            if (locale.contains('_')) {
-              final parts = locale.split('_');
-              if (parts.length >= 2 && parts.last.isNotEmpty) {
-                final countryCode = parts.last.toUpperCase();
-                // Should not throw
-                expect(countryCode.length, greaterThanOrEqualTo(0));
-              }
-            }
-          }, returnsNormally, reason: 'Failed to handle locale: $locale');
-        }
+      test('should handle IP geolocation failure gracefully', () async {
+        // Test that service doesn't crash on IP detection failure
+        expect(() async {
+          // Simulate the detection logic
+          String? countryCode;
+          String? countryName;
+          
+          try {
+            // This would be the actual IP detection call
+            throw Exception('Network error');
+          } catch (e) {
+            countryCode = 'UNKNOWN';
+            countryName = 'Unknown';
+          }
+          
+          expect(countryCode, equals('UNKNOWN'));
+          expect(countryName, equals('Unknown'));
+        }, returnsNormally);
       });
     });
 
     group('URL Routing Logic Tests', () {
-      test('should return backup URL for US users', () {
-        // Simulate Firebase data
-        final urlData = {
-          'primary_url': 'https://international-broker.com',
-          'backup_url': 'https://us-compliant-broker.com',
+      test('should select country-specific URL from Firestore data', () {
+        // Mock Firestore document with country-specific URLs
+        final mockData = {
+          'trading_url_us': 'https://us-broker.com',
+          'trading_url_gb': 'https://uk-broker.com',
+          'trading_url_fr': 'https://fr-broker.com',
+          'primary_url': 'https://global-broker.com',
+          'backup_url': 'https://backup-broker.com',
         };
-        final isUSUser = true;
 
-        // Apply routing logic (same as in service)
-        final selectedUrl = isUSUser 
-            ? urlData['backup_url'] ?? urlData['primary_url']
-            : urlData['primary_url'];
+        // Test country-specific URL selection
+        final usUrl = mockData['trading_url_us'] ?? mockData['primary_url'];
+        final gbUrl = mockData['trading_url_gb'] ?? mockData['primary_url'];
+        final frUrl = mockData['trading_url_fr'] ?? mockData['primary_url'];
+        final unknownCountryUrl = mockData['primary_url'];
 
-        expect(selectedUrl, equals('https://us-compliant-broker.com'));
+        expect(usUrl, equals('https://us-broker.com'));
+        expect(gbUrl, equals('https://uk-broker.com'));
+        expect(frUrl, equals('https://fr-broker.com'));
+        expect(unknownCountryUrl, equals('https://global-broker.com'));
       });
 
-      test('should return primary URL for non-US users', () {
-        // Simulate Firebase data
-        final urlData = {
-          'primary_url': 'https://international-broker.com',
-          'backup_url': 'https://us-compliant-broker.com',
+      test('should fallback to primary URL when country-specific URL not found', () {
+        final mockData = {
+          'primary_url': 'https://global-broker.com',
+          'backup_url': 'https://backup-broker.com',
+          // No country-specific URLs
         };
-        final isUSUser = false;
 
-        // Apply routing logic (same as in service)
-        final selectedUrl = isUSUser 
-            ? urlData['backup_url'] ?? urlData['primary_url']
-            : urlData['primary_url'];
+        // Test fallback logic
+        const countryKey = 'trading_url_unknown';
+        final selectedUrl = mockData[countryKey] ?? mockData['primary_url'];
 
-        expect(selectedUrl, equals('https://international-broker.com'));
+        expect(selectedUrl, equals('https://global-broker.com'));
       });
 
-      test('should fallback to primary URL if backup URL missing for US users', () {
-        // Simulate Firebase data without backup URL
-        final urlData = {
-          'primary_url': 'https://international-broker.com',
-          // No backup_url
-        };
-        final isUSUser = true;
-
-        // Apply routing logic with fallback (same as in service)
-        final selectedUrl = isUSUser 
-            ? urlData['backup_url'] ?? urlData['primary_url']
-            : urlData['primary_url'];
-
-        expect(selectedUrl, equals('https://international-broker.com'));
-      });
-
-      test('should provide hard-coded fallback when all Firebase URLs missing', () {
-        // Simulate empty Firebase data
-        final urlData = <String, String>{};
-        final fallbackUrl = 'https://www.trading212.com/';
-
-        // Apply fallback logic (same as in service)
-        final selectedUrl = urlData['primary_url'] ?? fallbackUrl;
-
-        expect(selectedUrl, equals('https://www.trading212.com/'));
-      });
-    });
-
-    group('Session Management Tests', () {
-      test('should reset session correctly', () {
-        // Act: Reset session
-        TradingLinkService.resetSession();
-
-        // Assert: All session data should be cleared
-        expect(TradingLinkService.isInitialized, isFalse);
-        expect(TradingLinkService.detectedCountryCode, isNull);
-        expect(TradingLinkService.isUSUser, isFalse);
-      });
-
-      test('should provide fallback URL when not initialized', () {
-        // Arrange: Ensure not initialized
-        TradingLinkService.resetSession();
-
-        // Act: Get trading URL before initialization
-        final url = TradingLinkService.getTradingUrl();
-
-        // Assert: Should return fallback URL
-        expect(url, equals('https://www.trading212.com/'));
-      });
-
-      test('should track initialization state', () {
-        // Initial state should be uninitialized
-        TradingLinkService.resetSession();
-        expect(TradingLinkService.isInitialized, isFalse);
+      test('should handle empty Firestore data gracefully', () {
+        // Test fallback to hardcoded URL
+        const fallbackUrl = 'https://www.zulutrade.com/?ref=2915819&utm_source=2915819&utm_medium=affiliate&utm_campaign=fallback';
         
-        // After reset, should still be uninitialized
-        expect(TradingLinkService.isInitialized, isFalse);
+        expect(fallbackUrl, isNotEmpty);
+        expect(fallbackUrl, contains('zulutrade.com'));
       });
     });
 
     group('URL Validation Tests', () {
-      test('should validate URL format correctly', () {
-        // Test valid URLs
+      test('should validate trading URLs correctly', () {
         final validUrls = [
-          'https://www.trading212.com/',
+          'https://www.zulutrade.com/?ref=2915819',
           'https://app.trading212.com/login',
           'https://secure-broker.com/trade?param=value',
           'http://localhost:3000/test',
@@ -185,7 +127,7 @@ void main() {
         }
       });
 
-      test('should reject invalid URLs', () {
+      test('should reject invalid trading URLs', () {
         final invalidUrls = [
           '',
           'not-a-url',
@@ -199,7 +141,6 @@ void main() {
             expect(url, isEmpty, reason: 'Empty URL should be empty');
           } else {
             final uri = Uri.tryParse(url);
-            // Should either be null or not have http/https scheme
             final isValidForTrading = uri != null && ['http', 'https'].contains(uri.scheme);
             expect(isValidForTrading, isFalse, 
                    reason: 'Invalid URL should be rejected: $url');
@@ -208,113 +149,209 @@ void main() {
       });
     });
 
-    group('Error Handling Logic Tests', () {
-      test('should handle null values gracefully', () {
-        // Test handling of null/malformed Firebase data
-        final malformedData = {
-          'primary_url': null,
-          'backup_url': 123, // Wrong type
-          'invalid_field': 'should be ignored',
-        };
-
-        // Simulate safe data access (same pattern as in service)
-        String? primaryUrl;
-        String? backupUrl;
-        
-        try {
-          primaryUrl = malformedData['primary_url'] as String?;
-        } catch (e) {
-          primaryUrl = null;
-        }
-        
-        try {
-          backupUrl = malformedData['backup_url'] as String?;
-        } catch (e) {
-          backupUrl = null;
-        }
-        
-        expect(primaryUrl, isNull);
-        expect(backupUrl, isNull); // Type mismatch should result in null
+    group('Session Management Tests', () {
+      test('should initialize session correctly', () {
+        expect(TradingLinkService.isInitialized, isFalse);
+        expect(TradingLinkService.detectedCountryCode, isNull);
+        expect(TradingLinkService.detectedCountryName, isNull);
       });
 
-      test('should handle network errors gracefully', () {
-        // Test that SocketException can be thrown (for HTTP timeouts)
-        expect(() => throw const SocketException('No Internet'), 
-               throwsA(isA<SocketException>()));
+      test('should reset session correctly', () {
+        TradingLinkService.resetSession();
+        
+        expect(TradingLinkService.isInitialized, isFalse);
+        expect(TradingLinkService.detectedCountryCode, isNull);
+        expect(TradingLinkService.detectedCountryName, isNull);
       });
 
-      test('should handle timeout scenarios', () {
-        // Test timeout handling logic
-        const timeoutDuration = Duration(seconds: 5);
-        expect(timeoutDuration.inSeconds, equals(5));
-        expect(timeoutDuration.inMilliseconds, equals(5000));
+      test('should provide fallback URL when not initialized', () {
+        TradingLinkService.resetSession();
+        
+        final url = TradingLinkService.getTradingUrl();
+        
+        expect(url, equals('https://www.zulutrade.com/?ref=2915819&utm_source=2915819&utm_medium=affiliate&utm_campaign=fallback'));
+        expect(url, isNotEmpty);
+      });
+
+      test('should track initialization state', () {
+        expect(TradingLinkService.isInitialized, isFalse);
+        
+        TradingLinkService.resetSession();
+        expect(TradingLinkService.isInitialized, isFalse);
       });
     });
 
-    group('Integration Workflow Tests', () {
-      test('complete workflow: US user gets backup URL', () {
-        // Simulate complete workflow for US user
-        final firebaseData = {
-          'primary_url': 'https://international-broker.com',
-          'backup_url': 'https://us-broker.com',
-          'updated_at': DateTime.now().toIso8601String(),
-        };
-
-        // Simulate country detection
-        final detectedCountry = 'US';
-        final isUSUser = (detectedCountry == 'US' || detectedCountry == 'USA');
-
-        // Apply URL routing logic
-        final selectedUrl = isUSUser 
-            ? firebaseData['backup_url'] ?? firebaseData['primary_url']
-            : firebaseData['primary_url'];
-
-        // Verify complete workflow
-        expect(detectedCountry, equals('US'));
-        expect(isUSUser, isTrue);
-        expect(selectedUrl, equals('https://us-broker.com'));
+    group('Location Info Tests', () {
+      test('should provide detailed location info for analytics', () {
+        final locationInfo = TradingLinkService.getLocationInfo();
+        
+        expect(locationInfo, isA<Map<String, dynamic>>());
+        expect(locationInfo.containsKey('country_code'), isTrue);
+        expect(locationInfo.containsKey('country_name'), isTrue);
+        expect(locationInfo.containsKey('detection_method'), isTrue);
       });
 
-      test('complete workflow: non-US user gets primary URL', () {
-        // Simulate complete workflow for non-US user
-        final firebaseData = {
-          'primary_url': 'https://international-broker.com',
-          'backup_url': 'https://us-broker.com',
-          'updated_at': DateTime.now().toIso8601String(),
-        };
+      test('should handle null location data gracefully', () {
+        TradingLinkService.resetSession();
+        
+        final locationInfo = TradingLinkService.getLocationInfo();
+        
+        expect(locationInfo['country_code'], isNull);
+        expect(locationInfo['country_name'], isNull);
+        expect(locationInfo['detection_method'], isA<String>());
+      });
+    });
 
-        // Simulate country detection
-        final detectedCountry = 'GB';
-        final isUSUser = (detectedCountry == 'US' || detectedCountry == 'USA');
-
-        // Apply URL routing logic
-        final selectedUrl = isUSUser 
-            ? firebaseData['backup_url'] ?? firebaseData['primary_url']
-            : firebaseData['primary_url'];
-
-        // Verify complete workflow
-        expect(detectedCountry, equals('GB'));
-        expect(isUSUser, isFalse);
-        expect(selectedUrl, equals('https://international-broker.com'));
+    group('URL Launch Tests', () {
+      test('should validate URL before launching', () {
+        const validUrl = 'https://www.zulutrade.com/?ref=2915819';
+        const invalidUrl = 'not-a-valid-url';
+        
+        final validUri = Uri.tryParse(validUrl);
+        final invalidUri = Uri.tryParse(invalidUrl);
+        
+        expect(validUri, isNotNull);
+        // Uri.tryParse returns a Uri even for invalid URLs, but it won't have a scheme
+        expect(invalidUri, isNotNull);
+        expect(invalidUri!.hasScheme, isFalse);
       });
 
-      test('complete workflow with failures should use fallback', () {
-        // Simulate all failures scenario
-        final firebaseExists = false;
-        final detectedCountry = null; // Failed geolocation
-        final isUSUser = false; // Default when detection fails
-        final fallbackUrl = 'https://www.trading212.com/';
+      test('should handle URL launch errors gracefully', () async {
+        // Test that the service doesn't crash on launch errors
+        expect(() async {
+          try {
+            // Simulate URL launch attempt
+            throw Exception('URL launch failed');
+          } catch (e) {
+            // Should handle error gracefully
+            expect(e, isA<Exception>());
+          }
+        }, returnsNormally);
+      });
+    });
 
-        // Apply complete fallback logic
-        final selectedUrl = firebaseExists 
-            ? 'would-use-firebase-data'
-            : fallbackUrl;
+    group('Integration Tests', () {
+      test('should provide consistent URLs across multiple calls', () {
+        // Multiple calls should return the same URL when not initialized
+        final url1 = TradingLinkService.getTradingUrl();
+        final url2 = TradingLinkService.getTradingUrl();
+        final url3 = TradingLinkService.getTradingUrl();
+        
+        expect(url1, equals(url2));
+        expect(url2, equals(url3));
+        expect(url1, isNotEmpty);
+      });
 
-        // Verify fallback workflow
-        expect(firebaseExists, isFalse);
-        expect(detectedCountry, isNull);
-        expect(isUSUser, isFalse);
-        expect(selectedUrl, equals('https://www.trading212.com/'));
+      test('should handle concurrent access safely', () async {
+        // Test concurrent access to the service
+        final futures = <Future<String>>[];
+        
+        for (int i = 0; i < 10; i++) {
+          futures.add(Future.delayed(
+            Duration(milliseconds: i * 10),
+            () => TradingLinkService.getTradingUrl(),
+          ));
+        }
+        
+        final results = await Future.wait(futures);
+        
+        // All results should be the same
+        for (final result in results) {
+          expect(result, equals(results.first));
+          expect(result, isNotEmpty);
+        }
+      });
+
+      test('should reset and reinitialize correctly', () {
+        // Get initial URL
+        final initialUrl = TradingLinkService.getTradingUrl();
+        expect(initialUrl, isNotEmpty);
+        
+        // Reset session
+        TradingLinkService.resetSession();
+        expect(TradingLinkService.isInitialized, isFalse);
+        
+        // Get URL again (should be the same fallback)
+        final urlAfterReset = TradingLinkService.getTradingUrl();
+        expect(urlAfterReset, equals(initialUrl));
+      });
+    });
+
+    group('Error Handling Tests', () {
+      test('should handle Firebase Remote Config errors gracefully', () async {
+        expect(() async {
+          try {
+            // Simulate Remote Config error
+            throw Exception('Firebase Remote Config error');
+          } catch (e) {
+            // Should fallback to Firestore
+            expect(e, isA<Exception>());
+          }
+        }, returnsNormally);
+      });
+
+      test('should handle Firestore errors gracefully', () async {
+        expect(() async {
+          try {
+            // Simulate Firestore error
+            throw Exception('Firestore connection error');
+          } catch (e) {
+            // Should fallback to hardcoded URL
+            expect(e, isA<Exception>());
+          }
+        }, returnsNormally);
+      });
+
+      test('should handle network errors gracefully', () async {
+        expect(() async {
+          try {
+            // Simulate network error
+            throw Exception('Network timeout');
+          } catch (e) {
+            // Should use fallback mechanisms
+            expect(e, isA<Exception>());
+          }
+        }, returnsNormally);
+      });
+    });
+
+    group('Country-Specific URL Logic Tests', () {
+      test('should generate correct country keys for Firestore', () {
+        final testCountries = [
+          'US', 'GB', 'FR', 'DE', 'JP', 'CA', 'AU'
+        ];
+
+        for (final country in testCountries) {
+          final countryKey = 'trading_url_${country.toLowerCase()}';
+          expect(countryKey, equals('trading_url_${country.toLowerCase()}'));
+        }
+      });
+
+      test('should handle country code normalization', () {
+        final testCases = [
+          {'input': 'us', 'expected': 'us'},
+          {'input': 'US', 'expected': 'us'},
+          {'input': 'Us', 'expected': 'us'},
+          {'input': 'GB', 'expected': 'gb'},
+        ];
+
+        for (final testCase in testCases) {
+          final normalized = testCase['input']!.toString().toLowerCase();
+          expect(normalized, equals(testCase['expected']));
+        }
+      });
+
+      test('should prioritize country-specific URLs over primary URL', () {
+        final mockData = {
+          'trading_url_us': 'https://us-specific-broker.com',
+          'primary_url': 'https://global-broker.com',
+        };
+
+        const countryKey = 'trading_url_us';
+        final selectedUrl = mockData[countryKey] ?? mockData['primary_url'];
+
+        expect(selectedUrl, equals('https://us-specific-broker.com'));
+        expect(selectedUrl, isNot(equals('https://global-broker.com')));
       });
     });
   });

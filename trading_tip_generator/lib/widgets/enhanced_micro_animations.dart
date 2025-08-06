@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../utils/color_utils.dart';
 
 /// Enhanced micro-animations for TradingTip cards and UI elements
 /// Leverages our brand colors and provides premium feel
@@ -92,13 +93,13 @@ class _AnimatedTradingCardState extends State<AnimatedTradingCard>
                 boxShadow: [
                   // Premium glow effect
                   BoxShadow(
-                    color: const Color(0xFF00D4AA).withOpacity(_glowAnimation.value * 0.4),
+                    color: ColorUtils.withOpacity(const Color(0xFF00D4AA), _glowAnimation.value * 0.4),
                     blurRadius: _shadowAnimation.value,
                     spreadRadius: _glowAnimation.value * 2,
                   ),
                   // Depth shadow
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.3),
+                    color: ColorUtils.withOpacity(Colors.black, 0.3),
                     blurRadius: _shadowAnimation.value * 0.5,
                     offset: Offset(0, _shadowAnimation.value * 0.3),
                   ),
@@ -185,7 +186,7 @@ class _AnimatedSentimentIndicatorState extends State<AnimatedSentimentIndicator>
             width: widget.size,
             height: widget.size,
             decoration: BoxDecoration(
-              color: _sentimentColor.withOpacity(0.2),
+              color: ColorUtils.withOpacity(_sentimentColor, 0.2),
               shape: BoxShape.circle,
               border: Border.all(
                 color: _sentimentColor,
@@ -193,7 +194,7 @@ class _AnimatedSentimentIndicatorState extends State<AnimatedSentimentIndicator>
               ),
               boxShadow: [
                 BoxShadow(
-                  color: _sentimentColor.withOpacity(0.3),
+                  color: ColorUtils.withOpacity(_sentimentColor, 0.3),
                   blurRadius: 10,
                   spreadRadius: 2,
                 ),
@@ -298,7 +299,7 @@ class _LoadingShimmerState extends State<LoadingShimmer>
               end: Alignment.centerRight,
               colors: [
                 widget.baseColor,
-                widget.highlightColor.withOpacity(0.5),
+                ColorUtils.withOpacity(widget.highlightColor, 0.5),
                 widget.baseColor,
               ],
               stops: [
@@ -423,11 +424,11 @@ class _SuccessCelebrationState extends State<SuccessCelebration>
                     width: 100,
                     height: 100,
                     decoration: BoxDecoration(
-                      color: const Color(0xFF00D4AA).withOpacity(0.9),
+                      color: ColorUtils.withOpacity(const Color(0xFF00D4AA), 0.9),
                       shape: BoxShape.circle,
                       boxShadow: [
                         BoxShadow(
-                          color: const Color(0xFF00D4AA).withOpacity(0.6),
+                          color: ColorUtils.withOpacity(const Color(0xFF00D4AA), 0.6),
                           blurRadius: 20,
                           spreadRadius: 10,
                         ),

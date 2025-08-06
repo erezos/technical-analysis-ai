@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../utils/color_utils.dart';
 
 /// Premium trading icons with enhanced visuals and animations
 class PremiumTradingIcons {
@@ -25,7 +26,7 @@ class PremiumTradingIcons {
                   borderRadius: BorderRadius.circular(size / 4),
                   boxShadow: [
                     BoxShadow(
-                      color: iconColor.withOpacity(0.3 * value),
+                      color: ColorUtils.withOpacity(iconColor, 0.3 * value),
                       blurRadius: 8 * value,
                       spreadRadius: 2 * value,
                     ),
@@ -65,7 +66,7 @@ class PremiumTradingIcons {
                   borderRadius: BorderRadius.circular(size / 4),
                   boxShadow: [
                     BoxShadow(
-                      color: iconColor.withOpacity(0.3 * value),
+                      color: ColorUtils.withOpacity(iconColor, 0.3 * value),
                       blurRadius: 8 * value,
                       spreadRadius: 2 * value,
                     ),
@@ -102,13 +103,13 @@ class PremiumTradingIcons {
                   borderRadius: BorderRadius.circular(size / 4),
                   boxShadow: [
                     BoxShadow(
-                      color: const Color(0xFF00D4AA).withOpacity(0.4 * value),
+                      color: ColorUtils.withOpacity(const Color(0xFF00D4AA), 0.4 * value),
                       blurRadius: 20 * value,
                       offset: Offset(0, 8 * value),
                       spreadRadius: 2 * value,
                     ),
                     BoxShadow(
-                      color: const Color(0xFF4ECDC4).withOpacity(0.2 * value),
+                      color: ColorUtils.withOpacity(const Color(0xFF4ECDC4), 0.2 * value),
                       blurRadius: 40 * value,
                       offset: Offset(0, 16 * value),
                     ),
@@ -132,11 +133,11 @@ class PremiumTradingIcons {
           height: size,
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(size / 4),
-            boxShadow: const [
+            boxShadow: [
               BoxShadow(
-                color: Color(0x6600D4AA),
+                color: ColorUtils.withOpacity(const Color(0x6600D4AA), 0.2),
                 blurRadius: 20,
-                offset: Offset(0, 8),
+                offset: const Offset(0, 8),
                 spreadRadius: 2,
               ),
             ],
@@ -176,7 +177,7 @@ class PremiumTradingIcons {
             borderRadius: BorderRadius.circular(size),
             boxShadow: [
               BoxShadow(
-                color: iconColor.withOpacity(0.3),
+                color: ColorUtils.withOpacity(iconColor, 0.3),
                 blurRadius: 10 + (10 * value),
                 spreadRadius: 2 + (3 * value),
               ),
@@ -223,17 +224,17 @@ class PremiumTradingIcons {
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
           colors: [
-            bgColor.withOpacity(0.8),
-            bgColor.withOpacity(0.6),
+            ColorUtils.withOpacity(bgColor, 0.8),
+            ColorUtils.withOpacity(bgColor, 0.6),
           ],
         ),
         border: Border.all(
-          color: Colors.white.withOpacity(0.1),
+          color: ColorUtils.withOpacity(Colors.white, 0.1),
           width: 1,
         ),
         boxShadow: [
           BoxShadow(
-            color: iconColor.withOpacity(0.1),
+            color: ColorUtils.withOpacity(iconColor, 0.1),
             blurRadius: 20,
             offset: const Offset(0, 4),
           ),

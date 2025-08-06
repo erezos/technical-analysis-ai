@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_analytics/firebase_analytics.dart';
+import '../utils/color_utils.dart';
 
 class EducationCategoryButton extends StatefulWidget {
   final String title;
@@ -29,7 +31,7 @@ class _EducationCategoryButtonState extends State<EducationCategoryButton>
   late AnimationController _animationController;
   late Animation<double> _scaleAnimation;
   late Animation<double> _glowAnimation;
-  bool _isPressed = false;
+  // bool _isPressed = false;
 
   @override
   void initState() {
@@ -63,24 +65,22 @@ class _EducationCategoryButtonState extends State<EducationCategoryButton>
   }
 
   void _handleTapDown(TapDownDetails details) {
-    setState(() => _isPressed = true);
     _animationController.forward();
   }
 
   void _handleTapUp(TapUpDetails details) {
-    setState(() => _isPressed = false);
     _animationController.reverse();
+    // Log event for educational section view
+    FirebaseAnalytics.instance.logEvent(name: 'educational_section_view', parameters: {'section_name': widget.title});
     widget.onTap();
   }
 
   void _handleTapCancel() {
-    setState(() => _isPressed = false);
     _animationController.reverse();
   }
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     final screenSize = MediaQuery.of(context).size;
     final isTablet = screenSize.width > 600;
     
@@ -109,29 +109,29 @@ class _EducationCategoryButtonState extends State<EducationCategoryButton>
               margin: const EdgeInsets.symmetric(vertical: 4),
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(16),
-                gradient: LinearGradient(
+                gradient: const LinearGradient(
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                   colors: [
-                    const Color(0xFF1A1A1A),
-                    const Color(0xFF2A2A2A),
-                    const Color(0xFF1E1E1E),
+                    Color(0xFF1A1A1A),
+                    Color(0xFF2A2A2A),
+                    Color(0xFF1E1E1E),
                   ],
                 ),
                 border: Border.all(
-                  color: primaryColor.withOpacity(_glowAnimation.value),
+                  color: ColorUtils.withOpacity(primaryColor, _glowAnimation.value),
                   width: 1.5,
                 ),
                 boxShadow: [
                   // Outer glow effect
                   BoxShadow(
-                    color: primaryColor.withOpacity(_glowAnimation.value * 0.3),
+                    color: ColorUtils.withOpacity(primaryColor, _glowAnimation.value * 0.3),
                     blurRadius: 12,
                     spreadRadius: 0,
                   ),
                   // Inner depth shadow
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.3),
+                    color: ColorUtils.withOpacity(Colors.black, 0.3),
                     blurRadius: 8,
                     offset: const Offset(0, 4),
                   ),
@@ -149,8 +149,8 @@ class _EducationCategoryButtonState extends State<EducationCategoryButton>
                             begin: Alignment.topLeft,
                             end: Alignment.bottomRight,
                             colors: [
-                              primaryColor.withOpacity(0.05),
-                              accentColor.withOpacity(0.03),
+                              ColorUtils.withOpacity(primaryColor, 0.05),
+                              ColorUtils.withOpacity(accentColor, 0.03),
                               Colors.transparent,
                             ],
                           ),
@@ -172,14 +172,14 @@ class _EducationCategoryButtonState extends State<EducationCategoryButton>
                                 begin: Alignment.topLeft,
                                 end: Alignment.bottomRight,
                                 colors: [
-                                  primaryColor.withOpacity(0.8),
-                                  accentColor.withOpacity(0.6),
+                                  ColorUtils.withOpacity(primaryColor, 0.8),
+                                  ColorUtils.withOpacity(accentColor, 0.6),
                                 ],
                               ),
                               borderRadius: BorderRadius.circular(12),
                               boxShadow: [
                                 BoxShadow(
-                                  color: primaryColor.withOpacity(0.3),
+                                  color: ColorUtils.withOpacity(primaryColor, 0.3),
                                   blurRadius: 8,
                                   offset: const Offset(0, 2),
                                 ),
@@ -257,7 +257,7 @@ class _EducationCategoryButtonState extends State<EducationCategoryButton>
                             width: isTablet ? 32 : 28,
                             height: isTablet ? 32 : 28,
                             decoration: BoxDecoration(
-                              color: Colors.white.withOpacity(0.1),
+                              color: ColorUtils.withOpacity(Colors.white, 0.1),
                               borderRadius: BorderRadius.circular(8),
                             ),
                             child: Icon(
@@ -277,8 +277,8 @@ class _EducationCategoryButtonState extends State<EducationCategoryButton>
                         child: InkWell(
                           borderRadius: BorderRadius.circular(16),
                           onTap: widget.onTap,
-                          splashColor: primaryColor.withOpacity(0.1),
-                          highlightColor: primaryColor.withOpacity(0.05),
+                          splashColor: ColorUtils.withOpacity(primaryColor, 0.1),
+                          highlightColor: ColorUtils.withOpacity(primaryColor, 0.05),
                         ),
                       ),
                     ),

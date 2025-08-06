@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:share_plus/share_plus.dart';
+import 'dart:io';
+import 'package:firebase_analytics/firebase_analytics.dart';
 import '../models/trading_tip.dart';
 import '../utils/trading_background_utils.dart';
+import '../utils/color_utils.dart';
+import '../utils/app_logger.dart';
 
 class TradingTipScreen extends StatefulWidget {
   final TradingTip tip;
@@ -61,29 +64,65 @@ class _TradingTipScreenState extends State<TradingTipScreen>
 
   @override
   Widget build(BuildContext context) {
+    AppLogger.info('📊 [ANALYTICS] Trading tip screen view - Symbol: ${widget.tip.symbol}, Timeframe: ${widget.tip.timeframe}');
     return Scaffold(
       backgroundColor: const Color(0xFF121212),
-      appBar: AppBar(
-        title: Text('${widget.tip.symbol} - ${widget.tip.formattedTimeframe}'),
-        backgroundColor: _getSentimentColor(widget.tip.sentiment),
-        foregroundColor: Colors.white,
-        elevation: 0,
-        flexibleSpace: Container(
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              colors: [
-                _getSentimentColor(widget.tip.sentiment),
-                _getSentimentColor(widget.tip.sentiment).withOpacity(0.8),
-              ],
+      appBar: PreferredSize(
+        preferredSize: const Size.fromHeight(kToolbarHeight),
+        child: AppBar(
+          automaticallyImplyLeading: true,
+          elevation: 0,
+          backgroundColor: Colors.transparent,
+          flexibleSpace: Container(
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                colors: [Color(0xFF0A0F13), Color(0xFF16222A), Color(0xFF0F2027), Color(0xFF2C5364), Color(0xFF00373A)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
             ),
           ),
-        ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.share),
-            onPressed: _shareTradingTip,
+          centerTitle: true,
+          title: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                _getTimeframeIcon(widget.tip.timeframe),
+                size: 24,
+                color: const Color(0xFF00F0C8),
+              ),
+              const SizedBox(width: 8),
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(
+                  widget.tip.formattedTimeframe,
+                  style: TextStyle(
+                    fontFamily: 'Inter',
+                    fontWeight: FontWeight.w700,
+                    fontSize: MediaQuery.of(context).size.width < 350 ? 16 : 22,
+                    letterSpacing: 1.1,
+                    color: const Color(0xFF00F0C8),
+                    shadows: [
+                      Shadow(
+                        blurRadius: 16,
+                        color: ColorUtils.withOpacity(const Color(0xFF00F0C8), 0.5),
+                        offset: const Offset(0, 0),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
           ),
-        ],
+          foregroundColor: Colors.white,
+          actions: [
+            IconButton(
+              icon: const Icon(Icons.share),
+              onPressed: _shareTradingTip,
+            ),
+          ],
+        ),
       ),
       body: FadeTransition(
         opacity: _fadeAnimation,
@@ -128,11 +167,9 @@ class _TradingTipScreenState extends State<TradingTipScreen>
   }
 
   Widget _buildBackgroundImage() {
-    final networkImageUrl = (widget.tip.images['latestTradingCard'] as Map<String, dynamic>?)?['url'] ?? '';
-    
     // PRIORITIZE LOCAL BACKGROUNDS for better performance and reliability
     // Only use network images as absolute fallback (for legacy compatibility)
-    final shouldUseLocal = true; // Force local backgrounds for now
+    const shouldUseLocal = true; // Force local backgrounds for now
     
     // Alternative logic (more conservative):
     // final shouldUseLocal = networkImageUrl.isEmpty || 
@@ -155,71 +192,10 @@ class _TradingTipScreenState extends State<TradingTipScreen>
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
                   colors: [
-                    _getSentimentColor(widget.tip.sentiment).withOpacity(0.3),
+                    ColorUtils.withOpacity(_getSentimentColor(widget.tip.sentiment), 0.3),
                     const Color(0xFF121212),
                     const Color(0xFF1A1A1A),
                   ],
-                ),
-              ),
-            );
-          },
-        ),
-      );
-    } else {
-      // Legacy fallback to network images (disabled for now)
-      return Positioned.fill(
-        child: CachedNetworkImage(
-          imageUrl: networkImageUrl,
-          fit: BoxFit.cover,
-          placeholder: (context, url) => Container(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [
-                  _getSentimentColor(widget.tip.sentiment).withOpacity(0.3),
-                  const Color(0xFF121212),
-                  const Color(0xFF1A1A1A),
-                ],
-              ),
-            ),
-            child: const Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  CircularProgressIndicator(
-                    color: Color(0xFF00D4AA),
-                    strokeWidth: 3,
-                  ),
-                  SizedBox(height: 16),
-                  Text(
-                    'Loading Background...',
-                    style: TextStyle(
-                      color: Colors.white70,
-                      fontSize: 16,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          errorWidget: (context, url, error) {
-            // When network image fails, use local background
-            final backgroundAsset = TradingBackgroundUtils.getRandomBackground(widget.tip.sentiment);
-            return Image.asset(
-              backgroundAsset,
-              fit: BoxFit.cover,
-              errorBuilder: (context, error, stackTrace) => Container(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: [
-                      _getSentimentColor(widget.tip.sentiment).withOpacity(0.3),
-                      const Color(0xFF121212),
-                      const Color(0xFF1A1A1A),
-                    ],
-                  ),
                 ),
               ),
             );
@@ -235,15 +211,15 @@ class _TradingTipScreenState extends State<TradingTipScreen>
       child: Container(
         padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
-          color: const Color(0xFF1E1E1E).withOpacity(0.92),
+          color: ColorUtils.withOpacity(const Color(0xFF1E1E1E), 0.92),
           borderRadius: BorderRadius.circular(20),
           border: Border.all(
-            color: _getSentimentColor(widget.tip.sentiment).withOpacity(0.3),
+            color: ColorUtils.withOpacity(_getSentimentColor(widget.tip.sentiment), 0.3),
             width: 1,
           ),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.6),
+              color: ColorUtils.withOpacity(Colors.black, 0.6),
               blurRadius: 20,
               offset: const Offset(0, 10),
             ),
@@ -310,10 +286,10 @@ class _TradingTipScreenState extends State<TradingTipScreen>
         width: logoSize,
         height: logoSize,
         decoration: BoxDecoration(
-          color: _getSentimentColor(widget.tip.sentiment).withOpacity(0.2),
+          color: ColorUtils.withOpacity(_getSentimentColor(widget.tip.sentiment), 0.2),
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
-            color: _getSentimentColor(widget.tip.sentiment).withOpacity(0.5),
+            color: ColorUtils.withOpacity(_getSentimentColor(widget.tip.sentiment), 0.5),
             width: 2,
           ),
         ),
@@ -331,10 +307,10 @@ class _TradingTipScreenState extends State<TradingTipScreen>
         width: logoSize,
         height: logoSize,
         decoration: BoxDecoration(
-          color: _getSentimentColor(widget.tip.sentiment).withOpacity(0.1),
+          color: ColorUtils.withOpacity(_getSentimentColor(widget.tip.sentiment), 0.1),
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
-            color: _getSentimentColor(widget.tip.sentiment).withOpacity(0.3),
+            color: ColorUtils.withOpacity(_getSentimentColor(widget.tip.sentiment), 0.3),
             width: 2,
           ),
         ),
@@ -371,21 +347,21 @@ class _TradingTipScreenState extends State<TradingTipScreen>
           boxShadow: [
             // Primary shadow for depth
             BoxShadow(
-              color: Colors.black.withOpacity(0.3),
+              color: ColorUtils.withOpacity(Colors.black, 0.3),
               blurRadius: logoSize * 0.15, // Scale blur with size
               offset: Offset(0, logoSize * 0.08), // Scale offset with size
               spreadRadius: logoSize * 0.02,
             ),
             // Secondary shadow for floating effect
             BoxShadow(
-              color: Colors.black.withOpacity(0.15),
+              color: ColorUtils.withOpacity(Colors.black, 0.15),
               blurRadius: logoSize * 0.25,
               offset: Offset(0, logoSize * 0.12),
               spreadRadius: logoSize * 0.04,
             ),
             // Colored glow based on sentiment for premium effect
             BoxShadow(
-              color: _getSentimentColor(widget.tip.sentiment).withOpacity(0.2),
+              color: ColorUtils.withOpacity(_getSentimentColor(widget.tip.sentiment), 0.2),
               blurRadius: logoSize * 0.3,
               offset: Offset(0, logoSize * 0.06),
               spreadRadius: logoSize * 0.03,
@@ -404,7 +380,7 @@ class _TradingTipScreenState extends State<TradingTipScreen>
               width: logoSize,
               height: logoSize,
               decoration: BoxDecoration(
-                color: _getSentimentColor(widget.tip.sentiment).withOpacity(0.1),
+                color: ColorUtils.withOpacity(_getSentimentColor(widget.tip.sentiment), 0.1),
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Center(
@@ -426,15 +402,15 @@ class _TradingTipScreenState extends State<TradingTipScreen>
       child: Container(
         padding: const EdgeInsets.all(24),
         decoration: BoxDecoration(
-          color: const Color(0xFF1E1E1E).withOpacity(0.85), // Semi-transparent
+          color: ColorUtils.withOpacity(const Color(0xFF1E1E1E), 0.85), // Semi-transparent
           borderRadius: BorderRadius.circular(20),
           border: Border.all(
-            color: _getSentimentColor(widget.tip.sentiment).withOpacity(0.5),
+            color: ColorUtils.withOpacity(_getSentimentColor(widget.tip.sentiment), 0.5),
             width: 1,
           ),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.6),
+              color: ColorUtils.withOpacity(Colors.black, 0.6),
               blurRadius: 20,
               offset: const Offset(0, 10),
             ),
@@ -451,7 +427,7 @@ class _TradingTipScreenState extends State<TradingTipScreen>
                     gradient: LinearGradient(
                       colors: [
                         _getSentimentColor(widget.tip.sentiment),
-                        _getSentimentColor(widget.tip.sentiment).withOpacity(0.7),
+                        ColorUtils.withOpacity(_getSentimentColor(widget.tip.sentiment), 0.7),
                       ],
                     ),
                     borderRadius: BorderRadius.circular(12),
@@ -524,15 +500,15 @@ class _TradingTipScreenState extends State<TradingTipScreen>
       child: Container(
         padding: const EdgeInsets.all(24),
         decoration: BoxDecoration(
-          color: const Color(0xFF1E1E1E).withOpacity(0.85), // Semi-transparent
+          color: ColorUtils.withOpacity(const Color(0xFF1E1E1E), 0.85), // Semi-transparent
           borderRadius: BorderRadius.circular(20),
           border: Border.all(
-            color: Colors.blue.withOpacity(0.5),
+            color: ColorUtils.withOpacity(Colors.blue, 0.5),
             width: 1,
           ),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.6),
+              color: ColorUtils.withOpacity(Colors.black, 0.6),
               blurRadius: 20,
               offset: const Offset(0, 10),
             ),
@@ -587,15 +563,15 @@ class _TradingTipScreenState extends State<TradingTipScreen>
       child: Container(
         padding: const EdgeInsets.all(24),
         decoration: BoxDecoration(
-          color: const Color(0xFF1E1E1E).withOpacity(0.85), // Semi-transparent
+          color: ColorUtils.withOpacity(const Color(0xFF1E1E1E), 0.85), // Semi-transparent
           borderRadius: BorderRadius.circular(20),
           border: Border.all(
-            color: Colors.purple.withOpacity(0.5),
+            color: ColorUtils.withOpacity(Colors.purple, 0.5),
             width: 1,
           ),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.6),
+              color: ColorUtils.withOpacity(Colors.black, 0.6),
               blurRadius: 20,
               offset: const Offset(0, 10),
             ),
@@ -645,15 +621,15 @@ class _TradingTipScreenState extends State<TradingTipScreen>
       child: Container(
         padding: const EdgeInsets.all(24),
         decoration: BoxDecoration(
-          color: const Color(0xFF1E1E1E).withOpacity(0.85), // Semi-transparent
+          color: ColorUtils.withOpacity(const Color(0xFF1E1E1E), 0.85), // Semi-transparent
           borderRadius: BorderRadius.circular(20),
           border: Border.all(
-            color: Colors.orange.withOpacity(0.5),
+            color: ColorUtils.withOpacity(Colors.orange, 0.5),
             width: 1,
           ),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.6),
+              color: ColorUtils.withOpacity(Colors.black, 0.6),
               blurRadius: 20,
               offset: const Offset(0, 10),
             ),
@@ -695,10 +671,10 @@ class _TradingTipScreenState extends State<TradingTipScreen>
                 margin: const EdgeInsets.only(bottom: 16),
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  color: Colors.orange.withOpacity(0.15), // More transparent for overlay
+                  color: ColorUtils.withOpacity(Colors.orange, 0.15), // More transparent for overlay
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(
-                    color: Colors.orange.withOpacity(0.3),
+                    color: ColorUtils.withOpacity(Colors.orange, 0.3),
                   ),
                 ),
                 child: Row(
@@ -751,15 +727,15 @@ class _TradingTipScreenState extends State<TradingTipScreen>
       decoration: BoxDecoration(
         gradient: LinearGradient(
           colors: [
-            color.withOpacity(0.1),
-            color.withOpacity(0.05),
+            ColorUtils.withOpacity(color, 0.1),
+            ColorUtils.withOpacity(color, 0.05),
           ],
         ),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: color.withOpacity(0.3)),
+        border: Border.all(color: ColorUtils.withOpacity(color, 0.3)),
         boxShadow: [
           BoxShadow(
-            color: color.withOpacity(0.1),
+            color: ColorUtils.withOpacity(color, 0.1),
             blurRadius: 8,
             offset: const Offset(0, 4),
           ),
@@ -796,12 +772,12 @@ class _TradingTipScreenState extends State<TradingTipScreen>
       decoration: BoxDecoration(
         gradient: LinearGradient(
           colors: [
-            color.withOpacity(0.1),
-            color.withOpacity(0.05),
+            ColorUtils.withOpacity(color, 0.1),
+            ColorUtils.withOpacity(color, 0.05),
           ],
         ),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: color.withOpacity(0.3)),
+        border: Border.all(color: ColorUtils.withOpacity(color, 0.3)),
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -818,7 +794,7 @@ class _TradingTipScreenState extends State<TradingTipScreen>
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             decoration: BoxDecoration(
               gradient: LinearGradient(
-                colors: [color, color.withOpacity(0.8)],
+                colors: [color, ColorUtils.withOpacity(color, 0.8)],
               ),
               borderRadius: BorderRadius.circular(20),
             ),
@@ -859,12 +835,12 @@ class _TradingTipScreenState extends State<TradingTipScreen>
       decoration: BoxDecoration(
         gradient: LinearGradient(
           colors: [
-            Colors.purple.withOpacity(0.1),
-            Colors.purple.withOpacity(0.05),
+            ColorUtils.withOpacity(Colors.purple, 0.1),
+            ColorUtils.withOpacity(Colors.purple, 0.05),
           ],
         ),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.purple.withOpacity(0.2)),
+        border: Border.all(color: ColorUtils.withOpacity(Colors.purple, 0.2)),
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -902,13 +878,37 @@ class _TradingTipScreenState extends State<TradingTipScreen>
   }
 
   IconData _getSentimentIcon(String? sentiment) {
+    AppLogger.info('📊 [ANALYTICS] Getting sentiment icon for: "$sentiment" (timeframe: ${widget.tip.formattedTimeframe})');
+    
     switch (sentiment?.toLowerCase()) {
       case 'bullish':
+        AppLogger.info('📈 [ANALYTICS] Returning trending_up icon for bullish sentiment');
         return Icons.trending_up;
       case 'bearish':
+        AppLogger.info('📉 [ANALYTICS] Returning trending_down icon for bearish sentiment');
         return Icons.trending_down;
       default:
+        AppLogger.info('➡️ [ANALYTICS] Returning trending_flat icon for neutral/unknown sentiment: "$sentiment"');
         return Icons.trending_flat;
+    }
+  }
+
+  IconData _getTimeframeIcon(String timeframe) {
+    AppLogger.info('🔍 [DEBUG] Getting timeframe icon for: "$timeframe"');
+    
+    switch (timeframe.toLowerCase()) {
+      case 'short_term':
+        AppLogger.info('⚡ [DEBUG] Returning flash_on icon for short term');
+        return Icons.flash_on;
+      case 'mid_term':
+        AppLogger.info('📈 [DEBUG] Returning trending_up icon for mid term');
+        return Icons.trending_up;
+      case 'long_term':
+        AppLogger.info('📊 [DEBUG] Returning timeline icon for long term');
+        return Icons.timeline;
+      default:
+        AppLogger.info('❓ [DEBUG] Unknown timeframe "$timeframe", using flash_on as fallback');
+        return Icons.flash_on; // Fallback to short term icon
     }
   }
 
@@ -951,22 +951,41 @@ class _TradingTipScreenState extends State<TradingTipScreen>
 
       // Get screen dimensions for iPad positioning
       final screenSize = MediaQuery.of(context).size;
+      final sharePositionOrigin = Rect.fromLTWH(
+        screenSize.width * 0.8, // Near share button (right side)
+        100, // Near app bar
+        screenSize.width * 0.2, // Width of share area
+        200, // Height of share area
+      );
       
       // Share using the share_plus package with iPad positioning
       await Share.share(
         shareContent,
         subject: '${widget.tip.symbol} - ${widget.tip.sentimentDisplay} Trading Signal',
-        sharePositionOrigin: Rect.fromLTWH(
-          screenSize.width * 0.8, // Near share button (right side)
-          100, // Near app bar
-          screenSize.width * 0.2, // Width of share area
-          200, // Height of share area
-        ),
+        sharePositionOrigin: sharePositionOrigin,
       );
-
-      print('✅ Trading tip shared successfully');
+      
+      // Track share analytics
+      AppLogger.info('📊 [ANALYTICS] Trading tip shared - Symbol: ${widget.tip.symbol}, Timeframe: ${widget.tip.timeframe}');
+      
+      // Log Firebase Analytics event for share tracking
+      try {
+        await FirebaseAnalytics.instance.logEvent(
+          name: 'trading_tip_shared',
+                  parameters: {
+          'symbol': widget.tip.symbol,
+          'timeframe': widget.tip.timeframe,
+          'sentiment': widget.tip.sentiment ?? 'unknown',
+          'strength': widget.tip.strength?.toString() ?? 'N/A',
+          'platform': Platform.isIOS ? 'iOS' : 'Android',
+          'has_analysis_data': widget.tip.hasAnalysisData.toString(),
+        },
+        );
+      } catch (e) {
+        AppLogger.error('❌ Error logging share analytics: $e');
+      }
     } catch (e) {
-      print('❌ Error sharing trading tip: $e');
+      AppLogger.error('❌ Error sharing trading tip: $e');
       
       // Show error message
       ScaffoldMessenger.of(context).showSnackBar(
@@ -1024,11 +1043,20 @@ class _TradingTipScreenState extends State<TradingTipScreen>
       content += '\n';
     }
     
-    // Footer with app branding
+    // Footer with app branding and download link
     content += '━━━━━━━━━━━━━━━━━━━━\n';
     content += '🚀 Powered by Technical-Analysis.AI\n';
-    content += '⚠️ Educational purposes only. Not financial advice.\n';
-    content += '#TradingTips #AI #TechnicalAnalysis';
+    content += '📱 Get AI Trading Signals: ';
+    
+    // Add platform-specific app store link
+    if (Platform.isIOS) {
+      content += 'https://apps.apple.com/us/app/technical-analysis-ai/id6746874804';
+    } else {
+      content += 'https://play.google.com/store/apps/details?id=com.ioa.TipSync';
+    }
+    
+    content += '\n⚠️ Educational purposes only. Not financial advice.\n';
+    content += '#TradingTips #AI #TechnicalAnalysis #TradingApp #Finance #Investing #Stocks #Crypto';
     
     return content;
   }

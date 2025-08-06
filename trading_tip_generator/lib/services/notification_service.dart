@@ -2,14 +2,50 @@ import 'dart:io';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart' as ph;
-import 'notification_permission_service_fixed.dart';
+import 'notification_permission_service.dart';
+import 'package:firebase_analytics/firebase_analytics.dart';
+import '../utils/app_logger.dart';
 
 /// Background message handler - MUST be top-level function
 @pragma('vm:entry-point')
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   // Don't need to initialize Firebase here - it's done automatically for background handlers
-  print('🔔 Background message received: ${message.messageId}');
-  print('📱 Background message data: ${message.data}');
+  AppLogger.info('🔔 Background message received: ${message.messageId}');
+  AppLogger.info('📱 Background message data: ${message.data}');
+  
+  // 📊 Track background notification reception
+  // Note: Firebase Analytics is automatically initialized for background handlers
+  try {
+    await FirebaseAnalytics.instance.logEvent(
+      name: 'notification_received_background',
+      parameters: {
+        'platform': Platform.isIOS ? 'iOS' : 'Android',
+        'message_id': message.messageId ?? 'unknown',
+        'notification_type': message.data['type'] ?? 'unknown',
+        'symbol': message.data['symbol'] ?? 'unknown',
+        'timeframe': message.data['timeframe'] ?? 'unknown',
+        'has_notification': message.notification != null,
+        'title': message.notification?.title ?? 'no_title',
+      },
+    );
+    
+    // Track trading tip specific background reception
+    if (message.data['type'] == 'trading_tip') {
+      await FirebaseAnalytics.instance.logEvent(
+        name: 'trading_tip_notification_received',
+        parameters: {
+          'platform': Platform.isIOS ? 'iOS' : 'Android',
+          'symbol': message.data['symbol'] ?? 'unknown',
+          'timeframe': message.data['timeframe'] ?? 'unknown',
+          'received_in': 'background',
+        },
+      );
+      
+      AppLogger.info('📈 Trading tip received in background: ${message.data['symbol']}');
+    }
+  } catch (e) {
+    AppLogger.error('❌ Error tracking background notification: $e');
+  }
 }
 
 class NotificationService {
@@ -20,7 +56,7 @@ class NotificationService {
   /// Initialize Firebase Cloud Messaging
   static Future<void> initialize({GlobalKey<NavigatorState>? navigatorKey}) async {
     try {
-      print('🔥 Initializing Firebase messaging...');
+      AppLogger.info('🔥 Initializing Firebase messaging...');
       
       _navigatorKey = navigatorKey;
       _messaging = FirebaseMessaging.instance;
@@ -40,13 +76,13 @@ class NotificationService {
       // Get initial message if app was opened from notification
       final initialMessage = await _messaging!.getInitialMessage();
       if (initialMessage != null) {
-        print('📲 App opened from notification: ${initialMessage.messageId}');
+        AppLogger.info('📲 App opened from notification: ${initialMessage.messageId}');
         _handleMessageOpenedApp(initialMessage);
       }
 
       // Subscribe to trading tips topic
       await _messaging!.subscribeToTopic('trading_tips');
-      print('📢 Subscribed to trading_tips topic');
+      AppLogger.info('📢 Subscribed to trading_tips topic');
 
       // Set up iOS-specific settings
       if (Platform.isIOS) {
@@ -58,16 +94,16 @@ class NotificationService {
           badge: true,
           sound: true,
         );
-        print('🍎 iOS foreground notification presentation configured');
+        AppLogger.info('🍎 iOS foreground notification presentation configured');
       }
 
       // Get FCM token
       _token = await _messaging!.getToken();
-      print('🔑 FCM Token: $_token');
+      AppLogger.info('🔑 FCM Token: $_token');
 
       // Listen for token refresh
       _messaging!.onTokenRefresh.listen((newToken) {
-        print('🔄 FCM Token refreshed: $newToken');
+        AppLogger.info('🔄 FCM Token refreshed: $newToken');
         _token = newToken;
         _saveTokenToFirebase();
       });
@@ -75,11 +111,11 @@ class NotificationService {
       // Save token to backend
       await _saveTokenToFirebase();
       
-      print('✅ Notification setup completed successfully');
+      AppLogger.info('✅ Notification setup completed successfully');
       
     } catch (e) {
-      print('❌ Error setting up notifications: $e');
-      print('❌ Stack trace: ${StackTrace.current}');
+      AppLogger.error('❌ Error setting up notifications: $e');
+      AppLogger.error('❌ Stack trace: ${StackTrace.current}');
     }
   }
 
@@ -89,32 +125,32 @@ class NotificationService {
       if (Platform.isAndroid) {
         // Android: Use permission_handler for clean, single dialog
         final status = await ph.Permission.notification.status;
-        print('🤖 Android notification permission status: $status');
+        AppLogger.info('🤖 Android notification permission status: $status');
         
         if (status.isDenied) {
           // COORDINATION: Mark that we're about to request permission (Android only)
           await NotificationPermissionService.markPermissionRequestMade();
           
           // First time - request permission using permission_handler
-          print('🤖 Requesting Android notification permission...');
+          AppLogger.info('🤖 Requesting Android notification permission...');
           final result = await ph.Permission.notification.request();
-          print('🤖 Android permission result: $result');
+          AppLogger.info('🤖 Android permission result: $result');
           
           if (result.isGranted) {
-            print('✅ Android notifications granted');
+            AppLogger.info('✅ Android notifications granted');
           } else if (result.isDenied) {
-            print('❌ Android notifications denied');
+            AppLogger.info('❌ Android notifications denied');
           } else if (result.isPermanentlyDenied) {
-            print('⚠️ Android notifications permanently denied');
+            AppLogger.info('⚠️ Android notifications permanently denied');
           }
         } else if (status.isGranted) {
-          print('✅ Android notifications already granted');
+          AppLogger.info('✅ Android notifications already granted');
         } else if (status.isPermanentlyDenied) {
-          print('⚠️ Android notifications permanently denied - user must enable in settings');
+          AppLogger.info('⚠️ Android notifications permanently denied - user must enable in settings');
         }
       } else if (Platform.isIOS) {
         // iOS: Use Firebase for iOS-specific permission flow (no coordination needed)
-        print('🍎 Requesting iOS notification permissions...');
+        AppLogger.info('🍎 Requesting iOS notification permissions...');
         
         final settings = await _messaging!.requestPermission(
           alert: true,
@@ -126,21 +162,21 @@ class NotificationService {
           criticalAlert: false,
         );
         
-        print('🍎 iOS permission result: ${settings.authorizationStatus}');
-        print('🍎 iOS settings - Alert: ${settings.alert}, Badge: ${settings.badge}, Sound: ${settings.sound}');
+        AppLogger.info('🍎 iOS permission result: ${settings.authorizationStatus}');
+        AppLogger.info('🍎 iOS settings - Alert: ${settings.alert}, Badge: ${settings.badge}, Sound: ${settings.sound}');
         
         if (settings.authorizationStatus == AuthorizationStatus.authorized) {
-          print('✅ iOS notifications fully authorized');
+          AppLogger.info('✅ iOS notifications fully authorized');
         } else if (settings.authorizationStatus == AuthorizationStatus.provisional) {
-          print('📱 iOS notifications provisionally authorized');
+          AppLogger.info('📱 iOS notifications provisionally authorized');
         } else if (settings.authorizationStatus == AuthorizationStatus.denied) {
-          print('❌ iOS notifications denied');
+          AppLogger.info('❌ iOS notifications denied');
         } else {
-          print('🤔 iOS notification permission not determined');
+          AppLogger.info('🤔 iOS notification permission not determined');
         }
       }
     } catch (e) {
-      print('❌ Error setting up platform permissions: $e');
+      AppLogger.error('❌ Error setting up platform permissions: $e');
     }
   }
 
@@ -149,39 +185,39 @@ class NotificationService {
       // Wait for APNS token to be available
       String? apnsToken = await _messaging!.getAPNSToken();
       if (apnsToken != null) {
-        print('📱 APNS token available: ${apnsToken.substring(0, 20)}...');
+        AppLogger.info('📱 APNS token available: ${apnsToken.substring(0, 20)}...');
       } else {
-        print('⏳ Waiting for APNS token...');
+        AppLogger.info('⏳ Waiting for APNS token...');
         // Wait up to 10 seconds for APNS token
         int attempts = 0;
         while (apnsToken == null && attempts < 10) {
-          await Future.delayed(Duration(seconds: 1));
+          await Future.delayed(const Duration(seconds: 1));
           apnsToken = await _messaging!.getAPNSToken();
           attempts++;
           if (apnsToken != null) {
-            print('📱 APNS token received after ${attempts}s: ${apnsToken.substring(0, 20)}...');
+            AppLogger.info('📱 APNS token received after ${attempts}s: ${apnsToken.substring(0, 20)}...');
             break;
           }
         }
         if (apnsToken == null) {
-          print('⚠️ APNS token not available after 10 seconds - notifications may not work');
+          AppLogger.info('⚠️ APNS token not available after 10 seconds - notifications may not work');
         }
       }
 
       // FIXED: Only get iOS notification settings on iOS (avoid Android dialog triggers)
       if (Platform.isIOS) {
         final settings = await _messaging!.getNotificationSettings();
-        print('🍎 iOS-specific notification settings:');
-        print('   Alert: ${settings.alert}');
-        print('   Badge: ${settings.badge}');
-        print('   Sound: ${settings.sound}');
-        print('   Lock Screen: ${settings.lockScreen}');
-        print('   Notification Center: ${settings.notificationCenter}');
+        AppLogger.info('🍎 iOS-specific notification settings:');
+        AppLogger.info('   Alert: ${settings.alert}');
+        AppLogger.info('   Badge: ${settings.badge}');
+        AppLogger.info('   Sound: ${settings.sound}');
+        AppLogger.info('   Lock Screen: ${settings.lockScreen}');
+        AppLogger.info('   Notification Center: ${settings.notificationCenter}');
       }
       
       if (apnsToken != null) {
-        print('📱 APNS Token Length: ${apnsToken.length}');
-        print('📱 APNS Token (first 20 chars): ${apnsToken.substring(0, 20)}...');
+        AppLogger.info('📱 APNS Token Length: ${apnsToken.length}');
+        AppLogger.info('📱 APNS Token (first 20 chars): ${apnsToken.substring(0, 20)}...');
         
         // Determine if we're in development or production mode
         bool isDebugMode = false;
@@ -190,11 +226,11 @@ class NotificationService {
           return true;
         }());
         
-        print('🔧 Build Mode: ${isDebugMode ? "DEBUG (Development APNS)" : "RELEASE (Production APNS)"}');
-        print('🔧 Expected APNS Environment: ${isDebugMode ? "sandbox" : "production"}');
+        AppLogger.info('🔧 Build Mode: ${isDebugMode ? "DEBUG (Development APNS)" : "RELEASE (Production APNS)"}');
+        AppLogger.info('🔧 Expected APNS Environment: ${isDebugMode ? "sandbox" : "production"}');
       }
     } catch (e) {
-      print('❌ Error setting up iOS notifications: $e');
+      AppLogger.error('❌ Error setting up iOS notifications: $e');
     }
   }
 
@@ -203,32 +239,83 @@ class NotificationService {
       try {
         // TODO: Save token to Firestore for server to use
         // We'll implement this when we add the server-side component
-        print('💾 Token ready to save: $_token');
+        AppLogger.info('💾 Token ready to save: $_token');
       } catch (e) {
-        print('❌ Error saving token: $e');
+        AppLogger.error('❌ Error saving token: $e');
       }
     }
   }
 
   static void _handleForegroundMessage(RemoteMessage message) {
-    print('🔔 Received foreground message: ${message.messageId}');
-    print('📱 Message data: ${message.data}');
-    print('📢 Notification: ${message.notification?.title} - ${message.notification?.body}');
+    AppLogger.info('🔔 Received foreground message: ${message.messageId}');
+    AppLogger.info('📱 Message data: ${message.data}');
+    AppLogger.info('📢 Notification: ${message.notification?.title} - ${message.notification?.body}');
+    
+    // 📊 iOS-specific analytics: Track notification received in foreground
+    FirebaseAnalytics.instance.logEvent(
+      name: 'notification_received_foreground',
+      parameters: {
+        'platform': Platform.isIOS ? 'iOS' : 'Android',
+        'message_id': message.messageId ?? 'unknown',
+        'notification_type': message.data['type'] ?? 'unknown',
+        'symbol': message.data['symbol'] ?? 'unknown',
+        'timeframe': message.data['timeframe'] ?? 'unknown',
+        'has_notification': message.notification != null,
+        'title': message.notification?.title ?? 'no_title',
+      },
+    );
     
     // Handle trading tip notifications
     if (message.data['type'] == 'trading_tip') {
-      print('📈 Trading tip received in foreground: ${message.data['symbol']}');
+      AppLogger.info('📈 Trading tip received in foreground: ${message.data['symbol']}');
+      
+      // 📊 Track trading tip specific reception
+      FirebaseAnalytics.instance.logEvent(
+        name: 'trading_tip_notification_received',
+        parameters: {
+          'platform': Platform.isIOS ? 'iOS' : 'Android',
+          'symbol': message.data['symbol'] ?? 'unknown',
+          'timeframe': message.data['timeframe'] ?? 'unknown',
+          'received_in': 'foreground',
+        },
+      );
+      
       _showInAppNotification(message);
     }
   }
 
   static void _handleMessageOpenedApp(RemoteMessage message) {
-    print('👆 Notification opened app: ${message.messageId}');
-    print('📱 Message data: ${message.data}');
+    AppLogger.info('👆 Notification opened app: ${message.messageId}');
+    AppLogger.info('📱 Message data: ${message.data}');
+    
+    // 📊 iOS-specific analytics: Track notification opened/clicked
+    FirebaseAnalytics.instance.logEvent(
+      name: 'notification_opened_app',
+      parameters: {
+        'platform': Platform.isIOS ? 'iOS' : 'Android',
+        'message_id': message.messageId ?? 'unknown',
+        'notification_type': message.data['type'] ?? 'unknown',
+        'symbol': message.data['symbol'] ?? 'unknown',
+        'timeframe': message.data['timeframe'] ?? 'unknown',
+        'opened_from': 'background_tap',
+      },
+    );
     
     // Handle trading tip notifications
     if (message.data['type'] == 'trading_tip') {
-      print('📈 Trading tip notification tapped: ${message.data['symbol']}');
+      AppLogger.info('📈 Trading tip notification tapped: ${message.data['symbol']}');
+      
+      // 📊 Track trading tip notification tap
+      FirebaseAnalytics.instance.logEvent(
+        name: 'trading_tip_notification_tapped',
+        parameters: {
+          'platform': Platform.isIOS ? 'iOS' : 'Android',
+          'symbol': message.data['symbol'] ?? 'unknown',
+          'timeframe': message.data['timeframe'] ?? 'unknown',
+          'tap_source': 'notification_center',
+        },
+      );
+      
       _navigateToTradingTip(message);
     }
   }
@@ -236,6 +323,17 @@ class NotificationService {
   /// Show in-app notification when app is in foreground
   static void _showInAppNotification(RemoteMessage message) {
     if (_navigatorKey?.currentContext != null) {
+      // 📊 Track in-app notification display
+      FirebaseAnalytics.instance.logEvent(
+        name: 'in_app_notification_shown',
+        parameters: {
+          'platform': Platform.isIOS ? 'iOS' : 'Android',
+          'notification_title': message.notification?.title ?? 'New Trading Signal',
+          'symbol': message.data['symbol'] ?? 'unknown',
+          'timeframe': message.data['timeframe'] ?? 'unknown',
+        },
+      );
+      
       final context = _navigatorKey!.currentContext!;
       
       ScaffoldMessenger.of(context).showSnackBar(
@@ -246,17 +344,30 @@ class NotificationService {
             children: [
               Text(
                 message.notification?.title ?? 'New Trading Signal',
-                style: TextStyle(fontWeight: FontWeight.bold),
+                style: const TextStyle(fontWeight: FontWeight.bold),
               ),
               Text(message.notification?.body ?? ''),
             ],
           ),
-          backgroundColor: Color(0xFF00D4AA),
-          duration: Duration(seconds: 4),
+          backgroundColor: const Color(0xFF00D4AA),
+          duration: const Duration(seconds: 4),
           action: SnackBarAction(
             label: 'View',
             textColor: Colors.white,
-            onPressed: () => _navigateToTradingTip(message),
+            onPressed: () {
+              // 📊 Track in-app notification action button tap
+              FirebaseAnalytics.instance.logEvent(
+                name: 'in_app_notification_action_tapped',
+                parameters: {
+                  'platform': Platform.isIOS ? 'iOS' : 'Android',
+                  'symbol': message.data['symbol'] ?? 'unknown',
+                  'timeframe': message.data['timeframe'] ?? 'unknown',
+                  'action': 'view_trading_tip',
+                },
+              );
+              
+              _navigateToTradingTip(message);
+            },
           ),
         ),
       );
@@ -271,11 +382,23 @@ class NotificationService {
       final timeframe = message.data['timeframe'] ?? message.data['target_timeframe'];
       final targetTimeframe = message.data['target_timeframe'] ?? timeframe;
       
-      print('🧭 Navigating to trading tip:');
-      print('   Symbol: $symbol');
-      print('   Timeframe: $timeframe');
-      print('   Target Timeframe: $targetTimeframe');
-      print('   Full data: ${message.data}');
+      AppLogger.info('🧭 Navigating to trading tip:');
+      AppLogger.info('   Symbol: $symbol');
+      AppLogger.info('   Timeframe: $timeframe');
+      AppLogger.info('   Target Timeframe: $targetTimeframe');
+      AppLogger.info('   Full data: ${message.data}');
+      
+      // 📊 Track navigation to trading tip from notification
+      FirebaseAnalytics.instance.logEvent(
+        name: 'notification_navigation_success',
+        parameters: {
+          'platform': Platform.isIOS ? 'iOS' : 'Android',
+          'symbol': symbol ?? 'unknown',
+          'timeframe': timeframe ?? 'unknown',
+          'target_timeframe': targetTimeframe ?? 'unknown',
+          'navigation_source': 'notification_tap',
+        },
+      );
       
       // Navigate to trading tip screen with timeframe-specific routing
       Navigator.of(context).pushNamed(
@@ -305,7 +428,7 @@ class NotificationService {
         return settings.authorizationStatus == AuthorizationStatus.authorized;
       }
     } catch (e) {
-      print('❌ Error checking notification status: $e');
+      AppLogger.error('❌ Error checking notification status: $e');
       return false;
     }
   }
@@ -313,11 +436,11 @@ class NotificationService {
   /// FIXED: Test notification setup (platform-specific)
   static Future<void> testNotificationSetup() async {
     try {
-      print('🧪 Testing notification setup...');
+      AppLogger.info('🧪 Testing notification setup...');
       
       // Check if messaging is initialized
       if (_messaging == null) {
-        print('❌ Firebase Messaging not initialized');
+        AppLogger.info('❌ Firebase Messaging not initialized');
         return;
       }
       
@@ -325,31 +448,31 @@ class NotificationService {
       if (Platform.isAndroid) {
         // Android: Use permission_handler to avoid triggering dialogs
         final status = await ph.Permission.notification.status;
-        print('📋 Android notification permission: $status');
-        print('   Granted: ${status.isGranted}');
-        print('   Denied: ${status.isDenied}');
-        print('   Permanently Denied: ${status.isPermanentlyDenied}');
+        AppLogger.info('📋 Android notification permission: $status');
+        AppLogger.info('   Granted: ${status.isGranted}');
+        AppLogger.info('   Denied: ${status.isDenied}');
+        AppLogger.info('   Permanently Denied: ${status.isPermanentlyDenied}');
       } else {
         // iOS: Use Firebase for detailed settings
         final settings = await _messaging!.getNotificationSettings();
-        print('📋 iOS notification settings:');
-        print('   Authorization: ${settings.authorizationStatus}');
-        print('   Alert: ${settings.alert}');
-        print('   Badge: ${settings.badge}');
-        print('   Sound: ${settings.sound}');
+        AppLogger.info('📋 iOS notification settings:');
+        AppLogger.info('   Authorization: ${settings.authorizationStatus}');
+        AppLogger.info('   Alert: ${settings.alert}');
+        AppLogger.info('   Badge: ${settings.badge}');
+        AppLogger.info('   Sound: ${settings.sound}');
       }
       
       // Check token
       final token = await _messaging!.getToken();
-      print('🔑 Current FCM token: $token');
+      AppLogger.info('🔑 Current FCM token: $token');
       
       // Check topic subscription
-      print('📢 Subscribed to trading_tips topic');
+      AppLogger.info('📢 Subscribed to trading_tips topic');
       
-      print('✅ Notification setup test completed');
+      AppLogger.info('✅ Notification setup test completed');
       
     } catch (e) {
-      print('❌ Error testing notification setup: $e');
+      AppLogger.error('❌ Error testing notification setup: $e');
     }
   }
 

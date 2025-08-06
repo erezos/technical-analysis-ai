@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../utils/color_utils.dart';
 
 /// Premium typography system for fintech apps
 class PremiumTypography {
@@ -30,12 +31,12 @@ class PremiumTypography {
           color: Colors.white,
           shadows: [
             Shadow(
-              color: primary.withOpacity(0.3),
+              color: ColorUtils.withOpacity(primary, 0.3),
               blurRadius: 20,
               offset: const Offset(0, 4),
             ),
             Shadow(
-              color: Colors.black.withOpacity(0.5),
+              color: ColorUtils.withOpacity(Colors.black, 0.5),
               blurRadius: 8,
               offset: const Offset(0, 2),
             ),
@@ -84,7 +85,7 @@ class PremiumTypography {
             foreground: Paint()
               ..style = PaintingStyle.stroke
               ..strokeWidth = 2
-              ..color = color.withOpacity(0.3)
+              ..color = ColorUtils.withOpacity(color, 0.3)
               ..maskFilter = MaskFilter.blur(BlurStyle.outer, glowRadius),
           ),
         ),
@@ -99,7 +100,7 @@ class PremiumTypography {
             color: Colors.white,
             shadows: [
               Shadow(
-                color: color.withOpacity(0.5),
+                color: ColorUtils.withOpacity(color, 0.5),
                 blurRadius: glowRadius / 2,
                 offset: const Offset(0, 2),
               ),
@@ -131,7 +132,7 @@ class PremiumTypography {
             color: textColor ?? Colors.white,
             shadows: [
               Shadow(
-                color: Colors.black.withOpacity(0.5),
+                color: ColorUtils.withOpacity(Colors.black, 0.5),
                 blurRadius: 8,
                 offset: const Offset(0, 2),
               ),
@@ -161,7 +162,7 @@ class PremiumTypography {
         color: color,
         shadows: [
           Shadow(
-            color: Colors.black.withOpacity(0.3),
+            color: ColorUtils.withOpacity(Colors.black, 0.3),
             blurRadius: 4,
             offset: const Offset(0, 1),
           ),
@@ -218,12 +219,12 @@ class PremiumTypography {
             color: Colors.white,
             shadows: [
               Shadow(
-                color: const Color(0xFF00D4AA).withOpacity(0.3),
+                color: ColorUtils.withOpacity(const Color(0xFF00D4AA), 0.3),
                 blurRadius: 12,
                 offset: const Offset(0, 2),
               ),
               Shadow(
-                color: Colors.black.withOpacity(0.5),
+                color: ColorUtils.withOpacity(Colors.black, 0.5),
                 blurRadius: 6,
                 offset: const Offset(0, 1),
               ),

@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:firebase_analytics/firebase_analytics.dart';
+import '../utils/color_utils.dart';
+import '../utils/app_logger.dart';
 
 /// Premium fintech button system inspired by top trading apps
 class PremiumFintechButtons {
@@ -21,7 +24,7 @@ class PremiumFintechButtons {
     
     // Responsive sizing - BIGGER button (8% of screen height instead of 7%)
     final buttonHeight = (screenHeight * 0.08).clamp(56.0, 80.0);
-    final fontSize = (screenWidth * 0.04).clamp(16.0, 20.0);
+    final fontSize = (screenWidth * 0.05).clamp(18.0, 24.0);
     final subtitleSize = (screenWidth * 0.025).clamp(12.0, 14.0);
     final iconSize = (fontSize * 1.2).clamp(18.0, 24.0);
     final borderRadius = (buttonHeight * 0.25).clamp(12.0, 18.0);
@@ -35,6 +38,9 @@ class PremiumFintechButtons {
         child: InkWell(
           borderRadius: BorderRadius.circular(borderRadius),
           onTap: isEnabled && !isLoading ? () {
+            // Log event for Copy Traders button click
+            AppLogger.info('🔘 Premium button tapped: Copy Traders');
+            FirebaseAnalytics.instance.logEvent(name: 'copy_traders_button_click', parameters: {'button_name': 'Copy Traders'});
             HapticFeedback.mediumImpact();
             onPressed();
           } : null,
@@ -55,12 +61,12 @@ class PremiumFintechButtons {
               ),
               boxShadow: isEnabled ? [
                 BoxShadow(
-                  color: const Color(0xFFFF6B6B).withOpacity(0.3),
+                  color: ColorUtils.withOpacity(const Color(0xFFFF6B6B), 0.3),
                   blurRadius: 20,
                   offset: const Offset(0, 8),
                 ),
                 BoxShadow(
-                  color: const Color(0xFFFF8E53).withOpacity(0.2),
+                  color: ColorUtils.withOpacity(const Color(0xFFFF8E53), 0.2),
                   blurRadius: 40,
                   offset: const Offset(0, 16),
                 ),
@@ -71,9 +77,9 @@ class PremiumFintechButtons {
                 ? SizedBox(
                     width: iconSize,
                     height: iconSize,
-                    child: CircularProgressIndicator(
+                    child: const CircularProgressIndicator(
                       strokeWidth: 2,
-                      valueColor: const AlwaysStoppedAnimation<Color>(Colors.white),
+                      valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
                     ),
                   )
                 : Row(
@@ -93,16 +99,16 @@ class PremiumFintechButtons {
                             style: TextStyle(
                               color: Colors.white,
                               fontSize: fontSize,
-                              fontWeight: FontWeight.w600,
+                              fontWeight: FontWeight.w700,
                               letterSpacing: 0.5,
                             ),
                           ),
                           if (subtitle != null) ...[
-                            SizedBox(height: 2),
+                            const SizedBox(height: 2),
                             Text(
                               subtitle,
                               style: TextStyle(
-                                color: Colors.white.withOpacity(0.8),
+                                color: ColorUtils.withOpacity(Colors.white, 0.8),
                                 fontSize: subtitleSize,
                                 fontWeight: FontWeight.w400,
                                 letterSpacing: 0.3,
@@ -154,17 +160,17 @@ class PremiumFintechButtons {
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
                 colors: [
-                  color.withOpacity(0.15),
-                  color.withOpacity(0.05),
+                  ColorUtils.withOpacity(color, 0.15),
+                  ColorUtils.withOpacity(color, 0.05),
                 ],
               ),
               border: Border.all(
-                color: color.withOpacity(0.3),
+                color: ColorUtils.withOpacity(color, 0.3),
                 width: 1,
               ),
               boxShadow: [
                 BoxShadow(
-                  color: color.withOpacity(0.1),
+                  color: ColorUtils.withOpacity(color, 0.1),
                   blurRadius: 20,
                   offset: const Offset(0, 4),
                 ),
@@ -225,12 +231,12 @@ class PremiumFintechButtons {
               color: bgColor,
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.3),
+                  color: ColorUtils.withOpacity(Colors.black, 0.3),
                   offset: const Offset(4, 4),
                   blurRadius: 8,
                 ),
                 BoxShadow(
-                  color: Colors.white.withOpacity(0.05),
+                  color: ColorUtils.withOpacity(Colors.white, 0.05),
                   offset: const Offset(-2, -2),
                   blurRadius: 4,
                 ),
@@ -275,12 +281,12 @@ class PremiumFintechButtons {
                 end: Alignment.bottomRight,
                 colors: [
                   bgColor,
-                  bgColor.withOpacity(0.8),
+                  ColorUtils.withOpacity(bgColor, 0.8),
                 ],
               ),
               boxShadow: [
                 BoxShadow(
-                  color: bgColor.withOpacity(0.4),
+                  color: ColorUtils.withOpacity(bgColor, 0.4),
                   blurRadius: 20,
                   offset: const Offset(0, 8),
                 ),
@@ -342,7 +348,7 @@ class PremiumFintechButtons {
               ],
             ),
             border: Border.all(
-              color: Colors.white.withOpacity(0.1),
+              color: ColorUtils.withOpacity(Colors.white, 0.1),
               width: 1,
             ),
           ),
@@ -354,14 +360,14 @@ class PremiumFintechButtons {
                   Container(
                     padding: const EdgeInsets.all(8),
                     decoration: BoxDecoration(
-                      color: color.withOpacity(0.15),
+                      color: ColorUtils.withOpacity(color, 0.15),
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Icon(icon, color: color, size: 20),
                   ),
                   const Spacer(),
                   if (onTap != null)
-                    Icon(
+                    const Icon(
                       Icons.arrow_forward_ios,
                       color: Colors.grey,
                       size: 12,

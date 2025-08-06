@@ -46,12 +46,12 @@ class DisclaimerPage extends StatelessWidget {
                     ],
                   ),
                 ),
-                Expanded(
+                const Expanded(
                   child: SingleChildScrollView(
-                    padding: const EdgeInsets.all(16),
+                    padding: EdgeInsets.all(16),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
-                      children: const [
+                      children: [
                         Text(
                           'Disclaimer',
                           style: TextStyle(

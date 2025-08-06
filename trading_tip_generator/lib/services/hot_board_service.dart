@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/hot_board_models.dart';
+import '../utils/app_logger.dart';
 
 class HotBoardService {
   static final FirebaseFirestore _firestore = FirebaseFirestore.instance;
@@ -9,6 +10,7 @@ class HotBoardService {
   /// Fetch the current hot board data from Firebase
   static Future<HotBoardData?> getHotBoardData() async {
     try {
+      AppLogger.info('Fetching hot board data...');
       final doc = await _firestore
           .collection(_collectionName)
           .doc(_documentId)
@@ -19,7 +21,7 @@ class HotBoardService {
       }
       return null;
     } catch (e) {
-      print('Error fetching hot board data: $e');
+      AppLogger.error('Error fetching hot board data: $e');
       return null;
     }
   }

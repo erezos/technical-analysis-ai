@@ -4,6 +4,7 @@ import '../models/hot_board_models.dart';
 import '../services/hot_board_service.dart';
 import '../utils/trading_colors.dart';
 import '../utils/responsive_utils.dart';
+import '../utils/color_utils.dart';
 
 class HotBoardScreenEnhanced extends StatefulWidget {
   const HotBoardScreenEnhanced({Key? key}) : super(key: key);
@@ -211,9 +212,9 @@ class _HotBoardScreenEnhancedState extends State<HotBoardScreenEnhanced>
             borderRadius: BorderRadius.circular(12),
             gradient: LinearGradient(
               colors: [
-                TradingColors.neutral.withOpacity(0.3),
-                TradingColors.neutral.withOpacity(0.1),
-                TradingColors.neutral.withOpacity(0.3),
+                ColorUtils.withOpacity(TradingColors.neutral, 0.3),
+                ColorUtils.withOpacity(TradingColors.neutral, 0.1),
+                ColorUtils.withOpacity(TradingColors.neutral, 0.3),
               ],
               stops: [
                 0.0,
@@ -247,7 +248,7 @@ class _HotBoardScreenEnhancedState extends State<HotBoardScreenEnhanced>
                 builder: (context, value, child) {
                   return Transform.scale(
                     scale: value,
-                    child: Icon(
+                    child: const Icon(
                       Icons.error_outline,
                       size: 64,
                       color: TradingColors.warning,
@@ -343,13 +344,13 @@ class _HotBoardScreenEnhancedState extends State<HotBoardScreenEnhanced>
         padding: ResponsiveUtils.getResponsivePadding(context, mobile: 12),
         decoration: BoxDecoration(
           color: isStale 
-              ? TradingColors.warning.withOpacity(0.1) 
-              : TradingColors.bullish.withOpacity(0.1),
+              ? ColorUtils.withOpacity(TradingColors.warning, 0.1) 
+              : ColorUtils.withOpacity(TradingColors.bullish, 0.1),
           borderRadius: BorderRadius.circular(8),
           border: Border.all(
             color: isStale 
-                ? (isHighContrast ? TradingColors.warning : TradingColors.warning.withOpacity(0.3))
-                : (isHighContrast ? TradingColors.bullish : TradingColors.bullish.withOpacity(0.3)),
+                ? (isHighContrast ? TradingColors.warning : ColorUtils.withOpacity(TradingColors.warning, 0.3))
+                : (isHighContrast ? TradingColors.bullish : ColorUtils.withOpacity(TradingColors.bullish, 0.3)),
           ),
         ),
         child: Row(
@@ -445,7 +446,7 @@ class _HotBoardScreenEnhancedState extends State<HotBoardScreenEnhanced>
             child: Container(
               padding: ResponsiveUtils.getResponsivePadding(context, mobile: 24),
               decoration: BoxDecoration(
-                color: TradingColors.neutral.withOpacity(0.1),
+                color: ColorUtils.withOpacity(TradingColors.neutral, 0.1),
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Center(
@@ -521,7 +522,7 @@ class _HotBoardScreenEnhancedState extends State<HotBoardScreenEnhanced>
               ),
               boxShadow: [
                 BoxShadow(
-                  color: trendColor.withOpacity(0.1),
+                  color: ColorUtils.withOpacity(trendColor, 0.1),
                   blurRadius: 8,
                   offset: const Offset(0, 2),
                 ),

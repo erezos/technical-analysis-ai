@@ -88,7 +88,28 @@ class LogoUtils {
       'GM': { name: 'General Motors', sector: 'Automotive', business: 'Vehicle Manufacturing' },
       'BABA': { name: 'Alibaba Group', sector: 'E-commerce', business: 'Online Marketplace' },
       'ROKU': { name: 'Roku', sector: 'Technology', business: 'Streaming Platform' },
-      'TWTR': { name: 'Twitter', sector: 'Technology', business: 'Social Media' }
+      'TWTR': { name: 'Twitter', sector: 'Technology', business: 'Social Media' },
+      'OKTA': { name: 'Okta', sector: 'Technology', business: 'Identity & Access Management' },
+      'DOCU': { name: 'DocuSign', sector: 'Technology', business: 'Digital Signature Platform' },
+      'TWLO': { name: 'Twilio', sector: 'Technology', business: 'Cloud Communications' },
+      'SNOW': { name: 'Snowflake', sector: 'Technology', business: 'Cloud Data Platform' },
+      'PLTR': { name: 'Palantir', sector: 'Technology', business: 'Data Analytics Platform' },
+      'ZM': { name: 'Zoom Video', sector: 'Technology', business: 'Video Conferencing' },
+      'EBAY': { name: 'eBay', sector: 'E-commerce', business: 'Online Marketplace' },
+      'ETSY': { name: 'Etsy', sector: 'E-commerce', business: 'Handmade Marketplace' },
+      'PFE': { name: 'Pfizer', sector: 'Healthcare', business: 'Pharmaceuticals' },
+      'ABBV': { name: 'AbbVie', sector: 'Healthcare', business: 'Biopharmaceuticals' },
+      'TMO': { name: 'Thermo Fisher Scientific', sector: 'Healthcare', business: 'Life Sciences' },
+      'DHR': { name: 'Danaher', sector: 'Healthcare', business: 'Life Sciences' },
+      'COST': { name: 'Costco', sector: 'Retail', business: 'Wholesale Club' },
+      'TGT': { name: 'Target', sector: 'Retail', business: 'Discount Retail' },
+      'LOW': { name: 'Lowe\'s', sector: 'Retail', business: 'Home Improvement' },
+      'SBUX': { name: 'Starbucks', sector: 'Consumer Services', business: 'Coffee Retail' },
+      'CVX': { name: 'Chevron', sector: 'Energy', business: 'Oil & Gas' },
+      'CAT': { name: 'Caterpillar', sector: 'Industrial', business: 'Heavy Equipment' },
+      'BA': { name: 'Boeing', sector: 'Aerospace', business: 'Aircraft Manufacturing' },
+      'GS': { name: 'Goldman Sachs', sector: 'Financial Services', business: 'Investment Banking' },
+      'MS': { name: 'Morgan Stanley', sector: 'Financial Services', business: 'Investment Banking' }
     };
 
     const company = companyInfo[symbol] || {

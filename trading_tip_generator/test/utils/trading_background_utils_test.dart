@@ -41,7 +41,7 @@ void main() {
     });
     
     test('should return different backgrounds on multiple calls (randomness)', () {
-      final backgrounds = Set<String>();
+      final backgrounds = <String>{};
       
       // Generate 20 backgrounds to test randomness
       for (int i = 0; i < 20; i++) {
@@ -58,9 +58,9 @@ void main() {
     });
     
     test('should correctly identify background type', () {
-      final bullishPath = 'assets/images/trading_backgrounds/bullish/bullish_background_1.png';
-      final bearishPath = 'assets/images/trading_backgrounds/bearish/bearish_background_1.png';
-      final unknownPath = 'assets/images/other/unknown.png';
+      const bullishPath = 'assets/images/trading_backgrounds/bullish/bullish_background_1.png';
+      const bearishPath = 'assets/images/trading_backgrounds/bearish/bearish_background_1.png';
+      const unknownPath = 'assets/images/other/unknown.png';
       
       expect(TradingBackgroundUtils.getBackgroundType(bullishPath), 'bullish');
       expect(TradingBackgroundUtils.getBackgroundType(bearishPath), 'bearish');
@@ -81,7 +81,7 @@ void main() {
         // Should be very fast - less than 100 microseconds per call
         expect(avgTimePerCall, lessThan(100));
         
-        print('⚡ Performance: ${avgTimePerCall.toStringAsFixed(2)} μs per background selection');
+        // Performance test completed successfully
       });
     });
   });

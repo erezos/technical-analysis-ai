@@ -5,8 +5,8 @@ import 'dart:math';
 import 'dart:io';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:permission_handler/permission_handler.dart';
-import 'package:permission_handler/permission_handler.dart';
-import 'package:permission_handler/permission_handler.dart';
+import '../utils/color_utils.dart';
+import '../utils/app_logger.dart';
 
 class NotificationPermissionService {
   static const double _showPromptProbability = 0.4; // 40% chance for returning users
@@ -22,7 +22,7 @@ class NotificationPermissionService {
       
       // If already granted, no need to show prompt
       if (settings.authorizationStatus == AuthorizationStatus.authorized) {
-        print('✅ Notifications already approved via Firebase - no prompt needed');
+        AppLogger.info('✅ Notifications already approved via Firebase - no prompt needed');
         return false;
       }
       
@@ -32,7 +32,7 @@ class NotificationPermissionService {
       
       if (!hasLaunchedBefore) {
         await prefs.setBool(_hasLaunchedBeforeKey, true);
-        print('🚀 First session detected - skipping custom notification prompt');
+        AppLogger.info('🚀 First session detected - skipping custom notification prompt');
         return false;
       }
       
@@ -40,11 +40,11 @@ class NotificationPermissionService {
       final randomValue = _random.nextDouble();
       final shouldShow = randomValue < _showPromptProbability;
       
-      print('🎲 Notification permission check: ${(randomValue * 100).toInt()}% - ${shouldShow ? "SHOW" : "SKIP"} prompt');
+      AppLogger.info('🎲 Notification permission check: ${(randomValue * 100).toInt()}% - ${shouldShow ? "SHOW" : "SKIP"} prompt');
       
       return shouldShow;
     } catch (e) {
-      print('❌ Error checking notification permission: $e');
+      AppLogger.error('❌ Error checking notification permission: $e');
       return false;
     }
   }
@@ -77,12 +77,12 @@ class NotificationPermissionService {
               ),
               borderRadius: BorderRadius.circular(isSmallScreen ? 16 : 24),
               border: Border.all(
-                color: const Color(0xFF00D4AA).withOpacity(0.3),
+                color: ColorUtils.withOpacity(const Color(0xFF00D4AA), 0.3),
                 width: 1,
               ),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.8),
+                  color: ColorUtils.withOpacity(Colors.black, 0.8),
                   blurRadius: isSmallScreen ? 20 : 30,
                   offset: Offset(0, isSmallScreen ? 10 : 15),
                 ),
@@ -103,7 +103,7 @@ class NotificationPermissionService {
                       borderRadius: BorderRadius.circular(isSmallScreen ? 16 : 20),
                       boxShadow: [
                         BoxShadow(
-                          color: const Color(0xFF00D4AA).withOpacity(0.4),
+                          color: ColorUtils.withOpacity(const Color(0xFF00D4AA), 0.4),
                           blurRadius: isSmallScreen ? 15 : 20,
                           offset: Offset(0, isSmallScreen ? 6 : 8),
                         ),
@@ -148,10 +148,10 @@ class NotificationPermissionService {
                   Container(
                     padding: EdgeInsets.all(isSmallScreen ? 12 : 16),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF00D4AA).withOpacity(0.1),
+                      color: ColorUtils.withOpacity(const Color(0xFF00D4AA), 0.1),
                       borderRadius: BorderRadius.circular(isSmallScreen ? 8 : 12),
                       border: Border.all(
-                        color: const Color(0xFF00D4AA).withOpacity(0.3),
+                        color: ColorUtils.withOpacity(const Color(0xFF00D4AA), 0.3),
                       ),
                     ),
                     child: Column(
@@ -221,7 +221,7 @@ class NotificationPermissionService {
                               borderRadius: BorderRadius.circular(isSmallScreen ? 8 : 12),
                             ),
                             elevation: 8,
-                            shadowColor: const Color(0xFF00D4AA).withOpacity(0.4),
+                            shadowColor: ColorUtils.withOpacity(const Color(0xFF00D4AA), 0.4),
                           ),
                           child: FittedBox(
                             fit: BoxFit.scaleDown,
@@ -273,7 +273,7 @@ class NotificationPermissionService {
   /// Request notification permission using Firebase messaging ONLY (iOS compatible)
   static Future<void> _requestNotificationPermission(BuildContext context) async {
     try {
-      print('🔔 Requesting notification permission via Firebase messaging...');
+      AppLogger.info('🔔 Requesting notification permission...');
       
       final messaging = FirebaseMessaging.instance;
       
@@ -291,19 +291,19 @@ class NotificationPermissionService {
         case AuthorizationStatus.authorized:
           message = '🔔 Notifications enabled! You\'ll never miss a signal.';
           backgroundColor = const Color(0xFF4CAF50);
-          print('✅ Notification permission granted');
+          AppLogger.info('✅ Notification permission granted');
           break;
           
         case AuthorizationStatus.provisional:
           message = '📱 Provisional notifications enabled.';
           backgroundColor = const Color(0xFF00D4AA);
-          print('⚡ Provisional notification permission granted');
+          AppLogger.info('⚡ Provisional notification permission granted');
           break;
           
         case AuthorizationStatus.denied:
           message = '📱 Notifications disabled. Enable in Settings.';
           backgroundColor = const Color(0xFFFF9800);
-          print('❌ Notification permission denied');
+          AppLogger.info('❌ Notification permission denied');
           
           // TDD FIX: Show settings button for BOTH iOS and Android
           if (context.mounted) {
@@ -328,7 +328,7 @@ class NotificationPermissionService {
         case AuthorizationStatus.notDetermined:
           message = '🤔 Permission not determined. Try again.';
           backgroundColor = Colors.grey;
-          print('⚠️ Notification permission not determined');
+          AppLogger.info('⚠️ Notification permission not determined');
           break;
       }
       
@@ -344,9 +344,9 @@ class NotificationPermissionService {
         );
       }
       
-      print('🔔 Notification permission process completed');
+      AppLogger.info('🔔 Notification permission process completed');
     } catch (e) {
-      print('❌ Error requesting notification permission: $e');
+      AppLogger.error('❌ Error requesting notification permission: $e');
       
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -364,26 +364,27 @@ class NotificationPermissionService {
   /// Open app settings (iOS & Android compatible)
   static Future<void> _openAppSettings() async {
     try {
+      AppLogger.info('🔧 Opening app settings for platform: ${Platform.isIOS ? "iOS" : "Android"}');
       if (Platform.isIOS) {
         // iOS: Use URL scheme approach
         const url = 'app-settings:';
         if (await canLaunchUrl(Uri.parse(url))) {
           await launchUrl(Uri.parse(url));
-          print('📱 Opened iOS app settings');
+          AppLogger.info('📱 Opened iOS app settings');
         } else {
-          print('❌ Could not open iOS app settings');
+          AppLogger.error('❌ Could not open iOS app settings');
         }
       } else if (Platform.isAndroid) {
         // Android: Use permission_handler plugin for app settings
         final bool opened = await openAppSettings();
         if (opened) {
-          print('🤖 Opened Android app settings');
+          AppLogger.info('🤖 Opened Android app settings');
         } else {
-          print('❌ Could not open Android app settings');
+          AppLogger.error('❌ Could not open Android app settings');
         }
       }
     } catch (e) {
-      print('❌ Error opening app settings: $e');
+      AppLogger.error('❌ Error opening app settings: $e');
     }
   }
 }

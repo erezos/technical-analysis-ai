@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../services/educational_service.dart';
 import '../widgets/responsive/responsive_layout.dart';
+import '../utils/color_utils.dart';
 
 class LessonScreen extends StatefulWidget {
   final String category;
@@ -228,7 +229,7 @@ class _LessonScreenState extends State<LessonScreen> {
         ),
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: const Color(0xFF00D4AA).withOpacity(0.2),
+          color: ColorUtils.withOpacity(const Color(0xFF00D4AA), 0.2),
           width: 1,
         ),
       ),
@@ -240,7 +241,7 @@ class _LessonScreenState extends State<LessonScreen> {
               Container(
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF00D4AA).withOpacity(0.2),
+                  color: ColorUtils.withOpacity(const Color(0xFF00D4AA), 0.2),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: const Icon(
@@ -293,7 +294,7 @@ class _LessonScreenState extends State<LessonScreen> {
         ),
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: const Color(0xFF00D4AA).withOpacity(0.2),
+          color: ColorUtils.withOpacity(const Color(0xFF00D4AA), 0.2),
           width: 1,
         ),
       ),
@@ -313,7 +314,7 @@ class _LessonScreenState extends State<LessonScreen> {
                       width: 32,
                       height: 32,
                       decoration: BoxDecoration(
-                        color: const Color(0xFF00D4AA).withOpacity(0.2),
+                        color: ColorUtils.withOpacity(const Color(0xFF00D4AA), 0.2),
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: Center(
@@ -362,7 +363,7 @@ class _LessonScreenState extends State<LessonScreen> {
                               Container(
                                 padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                                 decoration: BoxDecoration(
-                                  color: _getDifficultyColor(lesson.difficulty).withOpacity(0.2),
+                                  color: ColorUtils.withOpacity(_getDifficultyColor(lesson.difficulty), 0.2),
                                   borderRadius: BorderRadius.circular(4),
                                 ),
                                 child: Text(
@@ -488,7 +489,7 @@ class LessonDetailScreen extends StatelessWidget {
         ),
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: const Color(0xFF00D4AA).withOpacity(0.2),
+          color: ColorUtils.withOpacity(const Color(0xFF00D4AA), 0.2),
           width: 1,
         ),
       ),
@@ -500,7 +501,7 @@ class LessonDetailScreen extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF00D4AA).withOpacity(0.2),
+                  color: ColorUtils.withOpacity(const Color(0xFF00D4AA), 0.2),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: const Icon(
@@ -552,10 +553,10 @@ class LessonDetailScreen extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
-        color: const Color(0xFF00D4AA).withOpacity(0.1),
+        color: ColorUtils.withOpacity(const Color(0xFF00D4AA), 0.1),
         borderRadius: BorderRadius.circular(8),
         border: Border.all(
-          color: const Color(0xFF00D4AA).withOpacity(0.3),
+          color: ColorUtils.withOpacity(const Color(0xFF00D4AA), 0.3),
           width: 1,
         ),
       ),
@@ -596,7 +597,7 @@ class LessonDetailScreen extends StatelessWidget {
         ),
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: Colors.white.withOpacity(0.1),
+          color: ColorUtils.withOpacity(Colors.white, 0.1),
           width: 1,
         ),
       ),
@@ -618,10 +619,10 @@ class LessonDetailScreen extends StatelessWidget {
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: Colors.orange.withOpacity(0.1),
+                color: ColorUtils.withOpacity(Colors.orange, 0.1),
                 borderRadius: BorderRadius.circular(8),
                 border: Border.all(
-                  color: Colors.orange.withOpacity(0.3),
+                  color: ColorUtils.withOpacity(Colors.orange, 0.3),
                   width: 1,
                 ),
               ),
