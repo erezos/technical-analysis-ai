@@ -17,6 +17,7 @@ import 'services/notification_service.dart';
 import 'services/notification_permission_service.dart';
 import 'services/ad_service.dart';
 import 'services/ad_helper.dart';
+import 'services/interstitial_ad_manager.dart';
 import 'providers/trading_tips_provider.dart';
 import 'widgets/responsive/responsive_layout.dart';
 import 'widgets/premium_fintech_buttons.dart';
@@ -74,6 +75,7 @@ void main() async {
   
   // Initialize AdMob
   await AdService.initialize();
+  await InterstitialAdManager.initialize();
   
   // Enable edge-to-edge display - best practice for Android full screen
   SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
@@ -1838,27 +1840,58 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   void _navigateToTip(BuildContext context, TradingTipsProvider provider, String timeframe) async {
     // Store context before async operations
     final navigatorContext = context;
+    
     // Log event for page view
     FirebaseAnalytics.instance.logEvent(name: '${timeframe}_page_view', parameters: {'page_name': timeframe});
+    
     final tip = await provider.getTipForTimeframe(timeframe);
+    
     if (tip != null && navigatorContext.mounted) {
-      Navigator.push(
-        navigatorContext,
-        PageRouteBuilder(
-          pageBuilder: (context, animation, secondaryAnimation) => TradingTipScreen(tip: tip),
-          transitionsBuilder: (context, animation, secondaryAnimation, child) {
-            const begin = Offset(1.0, 0.0);
-            const end = Offset.zero;
-            const curve = Curves.easeInOutCubic;
+      // Show interstitial ad if needed, then navigate
+      bool adShown = await InterstitialAdManager.showInterstitialAdIfNeeded(
+        onAdDismissed: () {
+          if (navigatorContext.mounted) {
+            Navigator.push(
+              navigatorContext,
+              PageRouteBuilder(
+                pageBuilder: (context, animation, secondaryAnimation) => TradingTipScreen(tip: tip),
+                transitionsBuilder: (context, animation, secondaryAnimation, child) {
+                  const begin = Offset(1.0, 0.0);
+                  const end = Offset.zero;
+                  const curve = Curves.easeInOutCubic;
 
-            var tween = Tween(begin: begin, end: end).chain(CurveTween(curve: curve));
-            var offsetAnimation = animation.drive(tween);
+                  var tween = Tween(begin: begin, end: end).chain(CurveTween(curve: curve));
+                  var offsetAnimation = animation.drive(tween);
 
-            return SlideTransition(position: offsetAnimation, child: child);
-          },
-          transitionDuration: const Duration(milliseconds: 400),
-        ),
+                  return SlideTransition(position: offsetAnimation, child: child);
+                },
+                transitionDuration: const Duration(milliseconds: 400),
+              ),
+            );
+          }
+        },
       );
+
+      // If no ad was shown, navigate immediately
+      if (!adShown && navigatorContext.mounted) {
+        Navigator.push(
+          navigatorContext,
+          PageRouteBuilder(
+            pageBuilder: (context, animation, secondaryAnimation) => TradingTipScreen(tip: tip),
+            transitionsBuilder: (context, animation, secondaryAnimation, child) {
+              const begin = Offset(1.0, 0.0);
+              const end = Offset.zero;
+              const curve = Curves.easeInOutCubic;
+
+              var tween = Tween(begin: begin, end: end).chain(CurveTween(curve: curve));
+              var offsetAnimation = animation.drive(tween);
+
+              return SlideTransition(position: offsetAnimation, child: child);
+            },
+            transitionDuration: const Duration(milliseconds: 400),
+          ),
+        );
+      }
     } else if (navigatorContext.mounted) {
       ScaffoldMessenger.of(navigatorContext).showSnackBar(
         SnackBar(

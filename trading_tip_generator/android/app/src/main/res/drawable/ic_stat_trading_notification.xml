@@ -5,52 +5,16 @@
     android:viewportWidth="24"
     android:viewportHeight="24">
     
-    <!-- Modern trading notification icon with rocket and chart -->
+    <!-- Trading notification icon - White/transparent for Android 8.0+ compatibility -->
     
-    <!-- Background circle for better visibility -->
-    <path
-        android:fillColor="#FF00D4AA"
-        android:pathData="M12,12 m-11,0 a11,11 0 1,0 22,0 a11,11 0 1,0 -22,0"/>
-    
-    <!-- Rocket body (simplified for notification clarity) -->
+    <!-- Trending up chart line -->
     <path
         android:fillColor="#FFFFFFFF"
-        android:pathData="M12,3 L10,7 L14,7 Z"/>
+        android:pathData="M16,6 L18.29,8.29 L13.41,13.17 L9.41,9.17 L2,16.59 L3.41,18 L9.41,12 L13.41,16 L19.71,9.71 L22,12 L22,6 Z"/>
     
-    <!-- Rocket tip -->
+    <!-- Dollar sign -->
     <path
         android:fillColor="#FFFFFFFF"
-        android:pathData="M11,3 L13,3 L12,1 Z"/>
+        android:pathData="M11.8,10.9c-2.27-0.59-3-1.2-3-2.15 0-1.09 1.01-1.85 2.7-1.85 1.78,0 2.44,0.85 2.5,2.1h2.21c-0.07-1.72-1.12-3.3-3.21-3.81V3h-3v2.16c-1.94,0.42-3.5,1.68-3.5,3.61 0,2.31 1.91,3.46 4.7,4.13 2.5,0.6 3,1.48 3,2.41 0,0.69-0.49,1.79-2.7,1.79-2.06,0-2.87-0.92-2.98-2.1h-2.2c0.12,2.19 1.76,3.42 3.68,3.83V21h3v-2.15c1.95-0.37 3.5-1.5 3.5-3.55 0-2.84-2.43-3.81-4.7-4.4z"/>
     
-    <!-- Rocket fins -->
-    <path
-        android:fillColor="#FFFFFFFF"
-        android:pathData="M9,6 L7,8 L9,10 L10,8 Z"/>
-    <path
-        android:fillColor="#FFFFFFFF"
-        android:pathData="M15,6 L17,8 L15,10 L14,8 Z"/>
-    
-    <!-- Rocket flame -->
-    <path
-        android:fillColor="#FFFFD700"
-        android:pathData="M11,7 L10,9 L12,9 L11,7 Z"/>
-    
-    <!-- Trading chart line (simplified) -->
-    <path
-        android:strokeColor="#FFFFFFFF"
-        android:strokeWidth="1.5"
-        android:pathData="M6,17 L8,15 L10,16 L12,14 L14,15 L16,13 L18,14"/>
-    
-    <!-- Dollar sign (simplified) -->
-    <path
-        android:fillColor="#FFFFFFFF"
-        android:pathData="M20,5 L20,7 L19,7 L19,8 L20,8 L20,9 L19,9 L19,10 L20,10 L20,12 L19,12 L19,11 L18,11 L18,10 L19,10 L19,9 L18,9 L18,8 L19,8 L19,7 L18,7 L18,5 Z"/>
-    
-    <!-- Sparkles for effect -->
-    <path
-        android:fillColor="#FFFFD700"
-        android:pathData="M5,5 m-0.4,0 a0.4,0.4 0 1,0 0.8,0 a0.4,0.4 0 1,0 -0.8,0"/>
-    <path
-        android:fillColor="#FFFFD700"
-        android:pathData="M19,19 m-0.4,0 a0.4,0.4 0 1,0 0.8,0 a0.4,0.4 0 1,0 -0.8,0"/>
-</vector> 
+</vector>

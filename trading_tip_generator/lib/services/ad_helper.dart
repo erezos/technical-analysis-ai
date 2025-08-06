@@ -20,9 +20,9 @@ class AdHelper {
   static const String _prodEducationBannerAndroid = 'ca-app-pub-9307424222926115/3213837105';
   static const String _prodEducationBanneriOS = 'ca-app-pub-9307424222926115/7077076407';
   
-  // Production Interstitial Ad Unit IDs (if needed later)
-  static const String _prodInterstitialAndroid = 'ca-app-pub-XXXXXXXXXXXXXXXXX/XXXXXXXXXX'; // TODO: Create if needed
-  static const String _prodInterstitialiOS = 'ca-app-pub-XXXXXXXXXXXXXXXXX/XXXXXXXXXX'; // TODO: Create if needed
+  // Production Interstitial Ad Unit IDs
+  static const String _prodInterstitialAndroid = 'ca-app-pub-9307424222926115/4152380221';
+  static const String _prodInterstitialiOS = 'ca-app-pub-9307424222926115/1689868415';
   
   // App IDs (your real AdMob app IDs)
   static const String _appIdAndroid = 'ca-app-pub-9307424222926115~2893470577';
