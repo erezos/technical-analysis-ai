@@ -988,6 +988,7 @@ class _TradingTipScreenState extends State<TradingTipScreen>
       AppLogger.error('❌ Error sharing trading tip: $e');
       
       // Show error message
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: const Text('❌ Unable to share trading tip'),

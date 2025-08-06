@@ -73,7 +73,7 @@ class AdHelper {
   }
   
   /// Get banner ad unit ID for the current platform (legacy - use specific methods above)
-  @deprecated
+  @Deprecated('Use calendarBannerAdUnitId or educationBannerAdUnitId instead')
   static String get bannerAdUnitId => calendarBannerAdUnitId;
   
   /// Get interstitial ad unit ID for the current platform

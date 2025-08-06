@@ -509,7 +509,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
       margin: const EdgeInsets.only(bottom: 1),
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       decoration: BoxDecoration(
-        color: const Color(0xFF2A2A3E).withOpacity(0.6),
+        color: const Color(0xFF2A2A3E).withValues(alpha: 0.6),
         border: Border(
           left: BorderSide(
             color: importanceColor,
@@ -551,10 +551,10 @@ class _CalendarScreenState extends State<CalendarScreen> {
                 Row(
                   children: [
                     if (isEarnings) ...[
-                      Icon(
+                      const Icon(
                         Icons.business,
                         size: 14,
-                        color: const Color(0xFFFFE066),
+                        color: Color(0xFFFFE066),
                       ),
                       const SizedBox(width: 4),
                     ] else ...[
@@ -587,7 +587,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
                   children: [
                     _buildCompactDataItem('F:', event.forecast, const Color(0xFFFFE066)),
                     const SizedBox(width: 12),
-                    _buildCompactDataItem('P:', event.previous, Colors.white.withOpacity(0.7)),
+                    _buildCompactDataItem('P:', event.previous, Colors.white.withValues(alpha: 0.7)),
                     if (event.actual != null) ...[
                       const SizedBox(width: 12),
                       _buildCompactDataItem('A:', event.actual!, const Color(0xFF4ECDC4)),
@@ -609,7 +609,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
         Text(
           label,
           style: TextStyle(
-            color: Colors.white.withOpacity(0.6),
+            color: Colors.white.withValues(alpha: 0.6),
             fontSize: 10,
             fontWeight: FontWeight.w500,
           ),
@@ -635,13 +635,13 @@ class _CalendarScreenState extends State<CalendarScreen> {
           Icon(
             Icons.event_busy,
             size: 64,
-            color: Colors.white.withOpacity(0.3),
+            color: Colors.white.withValues(alpha: 0.3),
           ),
           const SizedBox(height: 16),
           Text(
             'No events found',
             style: TextStyle(
-              color: Colors.white.withOpacity(0.7),
+              color: Colors.white.withValues(alpha: 0.7),
               fontSize: 18,
               fontWeight: FontWeight.w600,
             ),
@@ -650,7 +650,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
           Text(
             'Try adjusting your filters',
             style: TextStyle(
-              color: Colors.white.withOpacity(0.5),
+              color: Colors.white.withValues(alpha: 0.5),
               fontSize: 14,
             ),
           ),

@@ -145,20 +145,20 @@ class TradingLinkService {
   /// Fetch country-specific URL using Firebase's built-in country targeting
   static Future<void> _fetchCountrySpecificUrl() async {
     try {
-      print('🔧 [REMOTE CONFIG] Fetching URL from Firebase Remote Config...');
+      AppLogger.info('🔧 [REMOTE CONFIG] Fetching URL from Firebase Remote Config...');
       
       // Firebase Remote Config automatically handles country targeting
       // The app sends the country info, and Firebase returns the appropriate URL
       final url = _remoteConfig.getString('trading_url');
       
-      print('🔧 [REMOTE CONFIG] Raw URL from Remote Config: "$url"');
-      print('🔧 [REMOTE CONFIG] URL length: ${url.length}');
-      print('🔧 [REMOTE CONFIG] URL is empty: ${url.isEmpty}');
-      print('🔧 [REMOTE CONFIG] URL equals "null": ${url == "null"}');
+      AppLogger.info('🔧 [REMOTE CONFIG] Raw URL from Remote Config: "$url"');
+      AppLogger.info('🔧 [REMOTE CONFIG] URL length: ${url.length}');
+      AppLogger.info('🔧 [REMOTE CONFIG] URL is empty: ${url.isEmpty}');
+      AppLogger.info('🔧 [REMOTE CONFIG] URL equals "null": ${url == "null"}');
       
       if (url.isNotEmpty && url != 'null') {
         _cachedTradingUrl = url;
-        print('✅ [REMOTE CONFIG] Successfully cached URL: $url');
+        AppLogger.info('✅ [REMOTE CONFIG] Successfully cached URL: $url');
         AppLogger.info('🎯 Country-targeted URL fetched:');
         AppLogger.info('   Country: $_detectedCountryCode ($_detectedCountryName)');
         AppLogger.info('   URL: $url');
@@ -166,13 +166,13 @@ class TradingLinkService {
         // Log analytics event
         _logCountryTargetedUrlFetch();
       } else {
-        print('⚠️ [REMOTE CONFIG] URL is empty or null, falling back to Firestore');
+        AppLogger.info('⚠️ [REMOTE CONFIG] URL is empty or null, falling back to Firestore');
         // Fallback to Firestore if Remote Config fails
         await _fetchFromFirestore();
       }
       
     } catch (e) {
-      print('❌ [REMOTE CONFIG] Error fetching URL: $e');
+      AppLogger.error('❌ [REMOTE CONFIG] Error fetching URL: $e');
       AppLogger.error('❌ Error fetching country-targeted URL: $e');
       // Fallback to Firestore
       await _fetchFromFirestore();
@@ -214,17 +214,17 @@ class TradingLinkService {
 
   /// Get current session trading URL (cached from app launch)
   static String getTradingUrl() {
-    print('🔧 [GET URL] getTradingUrl() called');
-    print('🔧 [GET URL] Is initialized: $_hasInitialized');
-    print('🔧 [GET URL] Cached URL: $_cachedTradingUrl');
+    AppLogger.info('🔧 [GET URL] getTradingUrl() called');
+    AppLogger.info('🔧 [GET URL] Is initialized: $_hasInitialized');
+    AppLogger.info('🔧 [GET URL] Cached URL: $_cachedTradingUrl');
     
     if (!_hasInitialized || _cachedTradingUrl == null) {
       final fallbackUrl = _getFallbackUrl();
-      print('⚠️ [GET URL] Using fallback URL: $fallbackUrl');
+      AppLogger.info('⚠️ [GET URL] Using fallback URL: $fallbackUrl');
       return fallbackUrl;
     }
     
-    print('✅ [GET URL] Returning cached URL: $_cachedTradingUrl');
+    AppLogger.info('✅ [GET URL] Returning cached URL: $_cachedTradingUrl');
     return _cachedTradingUrl!;
   }
 

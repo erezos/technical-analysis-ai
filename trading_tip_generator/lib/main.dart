@@ -1339,7 +1339,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         icon: Icons.rocket_launch,
         context: context,
         onPressed: () async {
-          print('🔘 [BUTTON PRESSED] Copy Traders button pressed!');
           AppLogger.info('🔘 [DEBUG] Copy Traders button pressed!');
           _openTradingPlatform();
         },
@@ -1348,11 +1347,11 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   }
 
   void _openTradingPlatform() async {
-    print('🔧 [METHOD CALLED] _openTradingPlatform() method called');
+    AppLogger.info('🔧 [METHOD CALLED] _openTradingPlatform() method called');
     
     // Debug platform detection
-    print('🔧 [PLATFORM DEBUG] Platform.isIOS: ${Platform.isIOS}');
-    print('🔧 [PLATFORM DEBUG] Platform.isAndroid: ${Platform.isAndroid}');
+    AppLogger.info('🔧 [PLATFORM DEBUG] Platform.isIOS: ${Platform.isIOS}');
+    AppLogger.info('🔧 [PLATFORM DEBUG] Platform.isAndroid: ${Platform.isAndroid}');
     
     // Check TradingLinkService status
     AppLogger.info('🔧 [SERVICE DEBUG] TradingLinkService Status:');
@@ -1362,7 +1361,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     
         // Platform-specific handling
     if (Platform.isIOS) {
-      print('🍎 [iOS FLOW] iOS flow triggered!');
+      AppLogger.info('🍎 [iOS FLOW] iOS flow triggered!');
       AppLogger.info('🍎 [iOS FLOW] Using OneLink URL from Firebase Remote Config...');
       
       // iOS: Use the same OneLink approach as Android (which works)
@@ -1486,7 +1485,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         _showTradingPlatformErrorDialog();
       }
     } else {
-      print('🤖 [ANDROID FLOW] Android flow triggered!');
+      AppLogger.info('🤖 [ANDROID FLOW] Android flow triggered!');
       // Android: Use the original OneLink URL logic
       final url = TradingLinkService.getTradingUrl();
       
@@ -1768,6 +1767,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       // Copy to clipboard
       await Clipboard.setData(const ClipboardData(text: url));
       
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: const Text('Trading link copied to clipboard!'),
@@ -1836,11 +1836,12 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   }
 
   void _navigateToTip(BuildContext context, TradingTipsProvider provider, String timeframe) async {
-    // Log event for page view
+    // Store context before async operations
     final navigatorContext = context;
+    // Log event for page view
     FirebaseAnalytics.instance.logEvent(name: '${timeframe}_page_view', parameters: {'page_name': timeframe});
     final tip = await provider.getTipForTimeframe(timeframe);
-    if (tip != null && mounted) {
+    if (tip != null && navigatorContext.mounted) {
       Navigator.push(
         navigatorContext,
         PageRouteBuilder(
@@ -1858,7 +1859,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           transitionDuration: const Duration(milliseconds: 400),
         ),
       );
-    } else if (mounted) {
+    } else if (navigatorContext.mounted) {
       ScaffoldMessenger.of(navigatorContext).showSnackBar(
         SnackBar(
           content: Text('No $timeframe tip available'),
@@ -1914,7 +1915,6 @@ class _NotificationTipNavigatorState extends State<_NotificationTipNavigator> {
     try {
       // Get the trading tips provider
       final provider = context.read<TradingTipsProvider>();
-      final navigatorContext = context;
       
       // Load latest tips if not already loaded
       await provider.loadLatestTips();
@@ -1924,7 +1924,7 @@ class _NotificationTipNavigatorState extends State<_NotificationTipNavigator> {
       
       if (tip != null && mounted) {
         // Navigate to the tip screen
-        Navigator.of(navigatorContext).pushReplacement(
+        Navigator.of(context).pushReplacement(
           PageRouteBuilder(
             pageBuilder: (context, animation, secondaryAnimation) => TradingTipScreen(tip: tip),
             transitionsBuilder: (context, animation, secondaryAnimation, child) {
