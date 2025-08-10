@@ -14,6 +14,12 @@ class InterstitialAdManager {
   static int _tipClickCount = 0;
   static bool _isFirstSession = false;
   
+  // Remote-configurable cadence controls
+  static int _firstSessionFirstAdIndex = 2; // default
+  static int _firstSessionEveryNClicks = 2; // default
+  static int _laterSessionFirstAdIndex = 1; // default
+  static int _laterSessionEveryNClicks = 2; // default
+  
   // Remote Config flags
   static bool _showAds = false;
   static bool _adsEnabled = false;
@@ -37,7 +43,7 @@ class InterstitialAdManager {
     
     if (_isFirstSession) {
       await prefs.setBool('has_opened_app_before', true);
-      AppLogger.info('🆕 First session detected - ads disabled');
+      AppLogger.info('🆕 First session detected - ads enabled with first-session frequency rules');
     } else {
       AppLogger.info('👤 Returning user - ads potentially enabled');
     }
@@ -51,26 +57,39 @@ class InterstitialAdManager {
       // Set default values
       await remoteConfig.setDefaults({
         'showAds': true,
+        'first_session_first_ad_index': 2,
+        'first_session_every_n_clicks': 2,
+        'later_session_first_ad_index': 1,
+        'later_session_every_n_clicks': 2,
       });
       
       // Fetch and activate
       await remoteConfig.fetchAndActivate();
       
       _showAds = remoteConfig.getBool('showAds');
-      _adsEnabled = _showAds && !_isFirstSession;
+      // Ads are enabled by Remote Config regardless of session type.
+      // Frequency rules differ for first session vs returning users.
+      _adsEnabled = _showAds;
+      
+      // Read cadence params
+      _firstSessionFirstAdIndex = _sanitizeIndex(remoteConfig.getInt('first_session_first_ad_index'));
+      _firstSessionEveryNClicks = _sanitizeEvery(remoteConfig.getInt('first_session_every_n_clicks'));
+      _laterSessionFirstAdIndex = _sanitizeIndex(remoteConfig.getInt('later_session_first_ad_index'));
+      _laterSessionEveryNClicks = _sanitizeEvery(remoteConfig.getInt('later_session_every_n_clicks'));
       
       AppLogger.info('🔧 Remote Config: showAds=$_showAds, adsEnabled=$_adsEnabled');
+      AppLogger.info('🔧 RC Cadence: firstSession[firstIndex=$_firstSessionFirstAdIndex, everyN=$_firstSessionEveryNClicks], laterSession[firstIndex=$_laterSessionFirstAdIndex, everyN=$_laterSessionEveryNClicks]');
     } catch (e) {
       AppLogger.error('❌ Failed to fetch Remote Config: $e');
       // Default to ads enabled for returning users if Remote Config fails
       _showAds = true;
-      _adsEnabled = !_isFirstSession;
+      _adsEnabled = true;
     }
   }
 
   /// Check if we should load ads based on conditions
   static bool _shouldLoadAds() {
-    return _adsEnabled && !_isFirstSession;
+    return _adsEnabled;
   }
 
   /// Load interstitial ad
@@ -151,18 +170,22 @@ class InterstitialAdManager {
       return false;
     }
     
-    // Skip if first session
-    if (_isFirstSession) {
-      AppLogger.info('🆕 First session - skipping ad');
-      return false;
-    }
-    
     // Increment click count
     _tipClickCount++;
     AppLogger.info('👆 Tip click count: $_tipClickCount');
     
-    // Show ad on every 2nd click (1, 3, 5, 7...)
-    bool shouldShowAd = _tipClickCount % 2 == 1;
+    // Frequency rules via Remote Config
+    final bool shouldShowAd = _isFirstSession
+        ? _shouldShowThisClick(
+            _tipClickCount,
+            _firstSessionFirstAdIndex,
+            _firstSessionEveryNClicks,
+          )
+        : _shouldShowThisClick(
+            _tipClickCount,
+            _laterSessionFirstAdIndex,
+            _laterSessionEveryNClicks,
+          );
     
     if (!shouldShowAd) {
       AppLogger.info('🔄 Not showing ad this click (frequency capping)');
@@ -219,6 +242,28 @@ class InterstitialAdManager {
     return true;
   }
 
+  // Helpers for cadence
+  static int _sanitizeIndex(int value) {
+    if (value.isNaN) return 1; // defensive
+    if (value < 1) return 1;
+    if (value > 1000) return 1000; // hard cap
+    return value;
+  }
+  
+  static int _sanitizeEvery(int value) {
+    if (value.isNaN) return 0; // treat as disabled if invalid
+    if (value < 1) return 0; // 0 => disabled cadence
+    if (value > 1000) return 1000; // cap
+    return value;
+  }
+  
+  static bool _shouldShowThisClick(int clickIndex, int firstIndex, int everyN) {
+    if (everyN < 1) return false; // disabled
+    final int start = firstIndex < 1 ? 1 : firstIndex;
+    if (clickIndex < start) return false;
+    return ((clickIndex - start) % everyN) == 0;
+  }
+
   /// Force refresh remote config (for testing)
   static Future<void> refreshRemoteConfig() async {
     await _fetchRemoteConfig();
@@ -245,6 +290,10 @@ class InterstitialAdManager {
       'isAdLoaded': _isAdLoaded,
       'isShowingAd': _isShowingAd,
       'tipClickCount': _tipClickCount,
+      'firstSessionFirstAdIndex': _firstSessionFirstAdIndex,
+      'firstSessionEveryNClicks': _firstSessionEveryNClicks,
+      'laterSessionFirstAdIndex': _laterSessionFirstAdIndex,
+      'laterSessionEveryNClicks': _laterSessionEveryNClicks,
     };
   }
 }
