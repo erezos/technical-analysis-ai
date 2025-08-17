@@ -1,9 +1,15 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
 import 'package:firebase_remote_config/firebase_remote_config.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'ad_helper.dart';
 import '../utils/app_logger.dart';
+
+// Helper for unawaited futures
+void unawaited(Future<void> future) {
+  // Intentionally not awaiting
+}
 
 class InterstitialAdManager {
   static InterstitialAd? _interstitialAd;
@@ -23,16 +29,33 @@ class InterstitialAdManager {
   // Remote Config flags
   static bool _showAds = false;
   static bool _adsEnabled = false;
+  
+  // ANR Prevention
+  static int _adRetryCount = 0;
+  static bool _isInitializing = false;
 
   /// Initialize the ad manager and check remote config
   static Future<void> initialize() async {
-    AppLogger.info('🎯 Initializing InterstitialAdManager');
+    if (_isInitializing) return;
+    _isInitializing = true;
     
-    await _checkFirstSession();
-    await _fetchRemoteConfig();
-    
-    if (_shouldLoadAds()) {
-      _loadInterstitialAd();
+    try {
+      AppLogger.info('🎯 Initializing InterstitialAdManager');
+      
+      // Use isolate for heavy initialization to prevent ANR
+      await Future.wait([
+        _checkFirstSession(),
+        _fetchRemoteConfig(),
+      ]);
+      
+      if (_shouldLoadAds()) {
+        // Load ad asynchronously without blocking
+        unawaited(_loadInterstitialAd());
+      }
+    } catch (e) {
+      AppLogger.error('❌ Error initializing InterstitialAdManager: $e');
+    } finally {
+      _isInitializing = false;
     }
   }
 
@@ -92,37 +115,55 @@ class InterstitialAdManager {
     return _adsEnabled;
   }
 
-  /// Load interstitial ad
-  static void _loadInterstitialAd() {
+  /// Load interstitial ad asynchronously to prevent ANR
+  static Future<void> _loadInterstitialAd() async {
     if (_isAdLoaded || _isShowingAd) return;
     
-    AppLogger.info('📱 Loading interstitial ad...');
+    AppLogger.info('📱 Loading interstitial ad asynchronously...');
     
-    InterstitialAd.load(
-      adUnitId: AdHelper.interstitialAdUnitId,
-      request: const AdRequest(),
-      adLoadCallback: InterstitialAdLoadCallback(
-        onAdLoaded: (InterstitialAd ad) {
-          AppLogger.info('✅ Interstitial ad loaded successfully');
-          _interstitialAd = ad;
-          _isAdLoaded = true;
-          
-          _setFullScreenContentCallback(ad);
-        },
-        onAdFailedToLoad: (LoadAdError error) {
-          AppLogger.error('❌ Interstitial ad failed to load: $error');
-          _interstitialAd = null;
-          _isAdLoaded = false;
-          
-          // Retry loading after 30 seconds
-          Future.delayed(const Duration(seconds: 30), () {
-            if (_shouldLoadAds()) {
-              _loadInterstitialAd();
-            }
-          });
-        },
-      ),
-    );
+    try {
+      // Use compute to offload ad loading from main thread
+      await Future.microtask(() {
+        InterstitialAd.load(
+          adUnitId: AdHelper.interstitialAdUnitId,
+          request: const AdRequest(),
+          adLoadCallback: InterstitialAdLoadCallback(
+            onAdLoaded: (InterstitialAd ad) {
+              AppLogger.info('✅ Interstitial ad loaded successfully');
+              _interstitialAd = ad;
+              _isAdLoaded = true;
+              
+              _setFullScreenContentCallback(ad);
+            },
+            onAdFailedToLoad: (LoadAdError error) {
+              AppLogger.error('❌ Interstitial ad failed to load: $error');
+              _interstitialAd = null;
+              _isAdLoaded = false;
+              
+              // Retry loading after 30 seconds with exponential backoff
+              _scheduleAdRetry();
+            },
+          ),
+        );
+      });
+    } catch (e) {
+      AppLogger.error('❌ Exception during ad loading: $e');
+      _scheduleAdRetry();
+    }
+  }
+  
+  /// Schedule ad retry with exponential backoff to prevent ANR
+  static void _scheduleAdRetry() {
+    final retryDelay = Duration(seconds: 30 + (_adRetryCount * 10));
+    _adRetryCount++;
+    
+    Future.delayed(retryDelay, () {
+      if (_shouldLoadAds() && _adRetryCount < 5) {
+        _loadInterstitialAd();
+      } else {
+        _adRetryCount = 0; // Reset retry count
+      }
+    });
   }
 
   /// Set up full screen content callback

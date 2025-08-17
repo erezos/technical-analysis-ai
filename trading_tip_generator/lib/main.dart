@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -9,6 +10,8 @@ import 'dart:io';
 import 'package:url_launcher/url_launcher.dart';
 import 'utils/app_logger.dart';
 import 'utils/color_utils.dart';
+import 'utils/anr_prevention.dart';
+import 'services/anr_monitoring_service.dart';
 
 import 'services/stats_service.dart';
 import 'services/trading_link_service.dart';
@@ -18,6 +21,7 @@ import 'services/notification_permission_service.dart';
 import 'services/ad_service.dart';
 import 'services/ad_helper.dart';
 import 'services/interstitial_ad_manager.dart';
+import 'services/app_rating_service.dart';
 import 'providers/trading_tips_provider.dart';
 import 'widgets/responsive/responsive_layout.dart';
 import 'widgets/premium_fintech_buttons.dart';
@@ -59,36 +63,82 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  
+  // Initialize ANR monitoring and prevention
+  await ANRMonitoringService.initialize();
+  if (kDebugMode) {
+    ANRPrevention.startFrameMonitoring();
+  }
+  
   await Firebase.initializeApp();
   
   // CRITICAL: Register background message handler BEFORE any other Firebase operations
   FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
   
-  // Initialize app statistics
-  await StatsService.initializeStatsForSession();
-  
-  // Initialize trading link
-  await TradingLinkService.initializeTradingLinkForSession();
-  
-  // Initialize educational content (NEW)
-  await EducationalService.initializeEducationalContent();
-  
-  // Initialize AdMob
-  await AdService.initialize();
-  await InterstitialAdManager.initialize();
-  
-  // Enable edge-to-edge display - best practice for Android full screen
-  SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
-  
-  // Set transparent system bars for edge-to-edge experience
-  SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
-    statusBarColor: Colors.transparent,
-    statusBarIconBrightness: Brightness.light,
-    systemNavigationBarColor: Colors.transparent,
-    systemNavigationBarIconBrightness: Brightness.light,
-  ));
+  // Initialize services in parallel to prevent sequential blocking
+  await Future.wait([
+    _initializeAppServices(),
+    _initializeUISettings(),
+  ]);
   
   runApp(const MyApp());
+}
+
+/// Initialize app services asynchronously to prevent ANR
+Future<void> _initializeAppServices() async {
+  try {
+    // Run heavy initialization in parallel with timeout protection
+    await Future.wait([
+      ANRPrevention.executeWithTimeout(
+        StatsService.initializeStatsForSession(),
+        timeout: const Duration(seconds: 5),
+        debugName: 'StatsService.initialize',
+      ),
+      ANRPrevention.executeWithTimeout(
+        TradingLinkService.initializeTradingLinkForSession(),
+        timeout: const Duration(seconds: 5),
+        debugName: 'TradingLinkService.initialize',
+      ),
+      ANRPrevention.executeWithTimeout(
+        EducationalService.initializeEducationalContent(),
+        timeout: const Duration(seconds: 5),
+        debugName: 'EducationalService.initialize',
+      ),
+    ]);
+    
+    // Initialize ads after core services (non-blocking)
+    unawaited(Future.wait([
+      AdService.initialize(),
+      InterstitialAdManager.initialize(),
+    ]));
+    
+  } catch (e) {
+    AppLogger.error('❌ [ANR] Service initialization failed: $e');
+    // Continue app launch even if some services fail
+  }
+}
+
+/// Initialize UI settings without blocking
+Future<void> _initializeUISettings() async {
+  try {
+    // Enable edge-to-edge display - best practice for Android full screen
+    SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+    
+    // Set transparent system bars for edge-to-edge experience
+    SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
+      statusBarColor: Colors.transparent,
+      statusBarIconBrightness: Brightness.light,
+      systemNavigationBarColor: Colors.transparent,
+      systemNavigationBarIconBrightness: Brightness.light,
+    ));
+  } catch (e) {
+    AppLogger.error('❌ [ANR] UI settings initialization failed: $e');
+  }
+}
+
+// Helper for unawaited futures
+void unawaited(Future<void> future) {
+  // Intentionally not awaiting
 }
 
 class MyApp extends StatelessWidget {
@@ -129,6 +179,7 @@ class MyApp extends StatelessWidget {
                 builder: (context) => _NotificationTipNavigator(
                   symbol: symbol,
                   timeframe: timeframe,
+                  fromNotification: args['from_notification'] ?? false,
                 ),
                 settings: settings,
               );
@@ -214,12 +265,19 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     _fadeController.forward();
     _scaleController.forward();
     
-    // Load tips when screen loads
+    // Load tips when screen loads (with ANR prevention)
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<TradingTipsProvider>().loadLatestTips();
+      // Use ANR prevention for heavy operations
+      ANRPrevention.executeWithTimeout(
+        context.read<TradingTipsProvider>().loadLatestTips(),
+        timeout: const Duration(seconds: 10),
+        debugName: 'loadLatestTips',
+      ).catchError((e) {
+        AppLogger.error('❌ [ANR] Failed to load tips: $e');
+      });
       
-      // Check if we should show notification permission prompt (70% chance)
-      _checkNotificationPermission();
+      // Check notification permission asynchronously
+      unawaited(_checkNotificationPermission());
     });
   }
 
@@ -1924,10 +1982,12 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 class _NotificationTipNavigator extends StatefulWidget {
   final String symbol;
   final String timeframe;
+  final bool fromNotification;
 
   const _NotificationTipNavigator({
     required this.symbol,
     required this.timeframe,
+    this.fromNotification = false,
   });
 
   @override
@@ -1973,6 +2033,11 @@ class _NotificationTipNavigatorState extends State<_NotificationTipNavigator> {
             transitionDuration: const Duration(milliseconds: 400),
           ),
         );
+        
+        // 🌟 Trigger rating popup if user came from notification
+        if (widget.fromNotification && mounted) {
+          AppRatingService.handleNotificationArrival(context);
+        }
       } else {
         // If no tip available, show message and navigate to home
         if (mounted) {

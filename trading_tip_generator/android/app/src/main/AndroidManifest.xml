@@ -68,7 +68,7 @@
         <!-- Default notification icon -->
         <meta-data
             android:name="com.google.firebase.messaging.default_notification_icon"
-            android:resource="@drawable/ic_stat_dollar_trend" />
+            android:resource="@drawable/ic_stat_ai_notification" />
         
         <!-- Default notification color -->
         <meta-data

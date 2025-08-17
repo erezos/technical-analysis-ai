@@ -5,6 +5,7 @@ import 'package:permission_handler/permission_handler.dart' as ph;
 import 'notification_permission_service.dart';
 import 'package:firebase_analytics/firebase_analytics.dart';
 import '../utils/app_logger.dart';
+import 'app_rating_service.dart';
 
 /// Background message handler - MUST be top-level function
 @pragma('vm:entry-point')
@@ -408,8 +409,12 @@ class NotificationService {
           'timeframe': timeframe,
           'target_timeframe': targetTimeframe, // Ensure we have the target timeframe
           'data': message.data,
+          'from_notification': true, // Flag to trigger rating popup
         },
       );
+      
+      // 🌟 Trigger rating popup for engaged notification users
+      AppRatingService.handleNotificationArrival(context);
     }
   }
 

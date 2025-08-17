@@ -567,7 +567,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
                     ],
                     Expanded(
                       child: Text(
-                        isEarnings ? '${event.company} (${event.event})' : event.event,
+                        event.event,
                         style: const TextStyle(
                           color: Colors.white,
                           fontWeight: FontWeight.w600,
